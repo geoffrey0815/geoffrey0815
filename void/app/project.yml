@@ -30,7 +30,10 @@ targets:
   Void:
     type: application
     platform: iOS
-    scheme: {}
+    scheme:
+      testTargets:
+        - VoidTests
+        - VoidUITests
     sources:
       - Void
       - Shared
@@ -50,9 +53,13 @@ targets:
         NSSupportsLiveActivities: true
         NSMicrophoneUsageDescription: 회의를 녹음하고 기기 안에서 받아쓰기 위해 마이크를 사용합니다. 녹음은 기기 밖으로 나가지 않습니다.
         NSSpeechRecognitionUsageDescription: 녹음한 회의를 기기 안에서 받아쓰기 위해 음성 인식을 사용합니다.
+        # Only standard HTTPS and HMAC are used, which are exempt from export documentation.
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID)
+        # "Void" would shadow Swift.Void for anything importing the module (tests).
+        PRODUCT_MODULE_NAME: VoidMain
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   VoidWidgets:
@@ -72,3 +79,27 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID).widgets
         # Shared intents compile app-only code out of the extension with this flag.
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
+
+  VoidTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - VoidTests
+    dependencies:
+      - target: Void
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID).tests
+
+  VoidUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - VoidUITests
+    dependencies:
+      - target: Void
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID).uitests

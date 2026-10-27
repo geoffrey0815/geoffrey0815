@@ -43,6 +43,112 @@ jobs:
             build | tee build.log | grep -E "error:|warning: .*(Sendable|actor|concurrency)|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 
+  app-tests:
+    name: iOS tests and screenshots (simulator)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: void/app
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - run: xcodegen
+      - name: Pick the newest iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          for runtime in sorted((k for k in devices if "iOS" in k), reverse=True):
+              phones = [d for d in devices[runtime] if d["name"].startswith("iPhone")]
+              if phones:
+                  print(phones[0]["udid"]); print(runtime, phones[0]["name"], file=sys.stderr); break
+          ')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test -project Void.xcodeproj -scheme Void \
+            -destination "id=$UDID" \
+            -resultBundlePath TestResults.xcresult \
+            | tee test.log | grep -E "Test Case .*(passed|failed)|error:|XCTAssert|TEST (SUCCEEDED|FAILED)" || true
+          grep -q "TEST SUCCEEDED" test.log
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p evidence/raw evidence/screenshots
+          xcrun xcresulttool export attachments --path TestResults.xcresult --output-path evidence/raw || true
+          python3 - <<'PY'
+          import json, pathlib, shutil
+          raw = pathlib.Path("evidence/raw")
+          manifest = raw / "manifest.json"
+          if manifest.exists():
+              for test in json.loads(manifest.read_text()):
+                  for item in test.get("attachments", []):
+                      name = item.get("suggestedHumanReadableName", item["exportedFileName"])
+                      src = raw / item["exportedFileName"]
+                      if src.exists():
+                          shutil.copy(src, pathlib.Path("evidence/screenshots") / (name.split("_0_")[0] + src.suffix))
+          PY
+          ls -la evidence/screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-screenshots
+          path: void/app/evidence/screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-test-log
+          path: void/app/test.log
+
+  release:
+    name: Release archive (deploy check)
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: void/app
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - run: xcodegen
+      - name: Archive Release (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild archive -project Void.xcodeproj -scheme Void \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Void.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee archive.log | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+          grep -q "ARCHIVE SUCCEEDED" archive.log
+      - name: Inspect the archived app
+        run: |
+          APP=build/Void.xcarchive/Products/Applications/Void.app
+          {
+            echo "## Release archive"
+            echo '```'
+            for key in CFBundleIdentifier CFBundleShortVersionString CFBundleVersion MinimumOSVersion NSMicrophoneUsageDescription NSSpeechRecognitionUsageDescription NSSupportsLiveActivities UIBackgroundModes BGTaskSchedulerPermittedIdentifiers ITSAppUsesNonExemptEncryption; do
+              printf '%-40s %s\n' "$key" "$(/usr/libexec/PlistBuddy -c "Print :$key" "$APP/Info.plist" 2>&1 | tr '\n' ' ')"
+            done
+            echo
+            ls -1 "$APP" | grep -E "PrivacyInfo|silero|Assets.car|PlugIns"
+            ls -1 "$APP/PlugIns"
+            echo
+            echo "app icon renditions: $(xcrun assetutil --info "$APP/Assets.car" | grep -c '"Name" : "AppIcon"')"
+            echo "UITestSupport in Release binary: $(strings "$APP/Void" | grep -c uiTestSeed)"
+            du -sh "$APP" "$APP/PlugIns/VoidWidgets.appex"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY" | tee release-report.md
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/silero_vad.onnx"
+          test -d "$APP/PlugIns/VoidWidgets.appex"
+          test "$(strings "$APP/Void" | grep -c uiTestSeed)" = "0"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-release-report
+          path: void/app/release-report.md
+
   spikes:
     name: Spike benches build
     runs-on: macos-26

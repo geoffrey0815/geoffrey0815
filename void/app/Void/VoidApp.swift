@@ -10,7 +10,16 @@ struct VoidApp: App {
         WindowGroup {
             HomeView()
                 .environment(RecordingController.shared)
-                .task { await ProcessingPipeline.shared.recoverInterruptedWork() }
+                .task {
+                    #if DEBUG
+                    // Seeded UI-test data is static; recovery would try to reprocess it.
+                    if UITestSupport.isActive { return }
+                    #endif
+                    await ProcessingPipeline.shared.recoverInterruptedWork()
+                }
+                #if DEBUG
+                .preferredColorScheme(UITestSupport.colorScheme)
+                #endif
         }
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in

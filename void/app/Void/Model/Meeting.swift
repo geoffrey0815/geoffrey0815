@@ -112,6 +112,9 @@ enum Persistence {
     /// The store lives in its own folder excluded from iCloud/device backup, like the
     /// recordings: transcripts and summaries must not leave the device that way either.
     static let container: ModelContainer = {
+        #if DEBUG
+        if UITestSupport.isActive { return UITestSupport.makeSeededContainer() }
+        #endif
         var directory = URL.applicationSupportDirectory.appendingPathComponent("Store", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var values = URLResourceValues()

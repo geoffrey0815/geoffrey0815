@@ -5,13 +5,18 @@ import VoidCore
 /// recording file → transcript → summary → webhook. Everything but the webhook is on-device.
 @MainActor
 final class ProcessingPipeline {
-    static let shared = ProcessingPipeline()
+    static let shared = ProcessingPipeline(container: Persistence.container)
 
     var transcriber: any Transcriber = SpeechAnalyzerTranscriber()
-    var summarizer = Summarizer()
+    var summarizer: any MeetingSummarizer = Summarizer()
     var delivery = WebhookDelivery()
 
-    private var context: ModelContext { Persistence.container.mainContext }
+    private let container: ModelContainer
+    private var context: ModelContext { container.mainContext }
+
+    init(container: ModelContainer) {
+        self.container = container
+    }
     /// Meetings being processed by this process, so recovery never runs one twice.
     private var inFlight: Set<String> = []
     private var didRecover = false
@@ -40,9 +45,7 @@ final class ProcessingPipeline {
             meeting.title = summary.title
             meeting.summary = summary.summary
             meeting.decisions = summary.decisions
-            meeting.actionItems = summary.actionItems.map {
-                .init(task: $0.task, owner: $0.owner.isEmpty ? nil : $0.owner)
-            }
+            meeting.actionItems = summary.actionItems
             meeting.status = .ready
             meeting.processedAt = .now
             meeting.errorMessage = nil

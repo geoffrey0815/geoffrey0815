@@ -30,12 +30,34 @@ struct GeneratedSummary {
     var actionItems: [GeneratedActionItem]
 }
 
+/// What the pipeline stores; independent of the model's generated types so tests can fake it.
+struct MeetingSummary: Sendable, Equatable {
+    var title: String
+    var summary: String
+    var decisions: [String]
+    var actionItems: [MeetingResult.ActionItem]
+}
+
+protocol MeetingSummarizer {
+    func summarize(_ segments: [MeetingResult.Segment], outputLanguage: String) async throws -> MeetingSummary
+}
+
 /// Map-reduce summarization with the on-device system model (4,096-token context).
 /// Same approach as spikes/B-summary-bench; chunk size is tuned there.
-struct Summarizer {
+struct Summarizer: MeetingSummarizer {
     var maxCharactersPerChunk = 1_500
 
-    func summarize(_ segments: [MeetingResult.Segment], outputLanguage: String) async throws -> GeneratedSummary {
+    func summarize(_ segments: [MeetingResult.Segment], outputLanguage: String) async throws -> MeetingSummary {
+        let generated = try await generate(segments, outputLanguage: outputLanguage)
+        return MeetingSummary(
+            title: generated.title,
+            summary: generated.summary,
+            decisions: generated.decisions,
+            actionItems: generated.actionItems.map { .init(task: $0.task, owner: $0.owner.isEmpty ? nil : $0.owner) }
+        )
+    }
+
+    private func generate(_ segments: [MeetingResult.Segment], outputLanguage: String) async throws -> GeneratedSummary {
         guard case .available = SystemLanguageModel.default.availability else {
             throw SummarizerError.modelUnavailable
         }

@@ -19,6 +19,7 @@ struct HomeView: View {
                                 MeetingRow(meeting: meeting)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("meeting-\(meeting.id)")
                         }
                     }
                 }

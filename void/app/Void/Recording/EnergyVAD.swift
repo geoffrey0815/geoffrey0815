@@ -1,7 +1,8 @@
 import AVFoundation
 
 /// Fallback detector used only if the bundled Silero model cannot be loaded:
-/// level above an adaptive noise floor. Fans and keyboards can fool it.
+/// level above an adaptive noise floor. Noise louder than the margin (fans, keyboards)
+/// reads as speech and keeps a recording alive; that is why Silero is the default.
 final class EnergyVAD: VoiceActivityDetector {
     /// dB above the noise floor that counts as speech.
     var margin: Float = 12
@@ -9,12 +10,15 @@ final class EnergyVAD: VoiceActivityDetector {
 
     func isSpeech(_ buffer: AVAudioPCMBuffer) -> Bool {
         let db = 20 * log10(max(Self.rms(buffer), 1e-7))
+        let speech = db > noiseFloor + margin
         if db < noiseFloor {
             noiseFloor = db // drop fast to quiet rooms
-        } else {
-            noiseFloor += (db - noiseFloor) * 0.0005 // rise slowly so speech does not become "floor"
+        } else if !speech {
+            // Track the room only on non-speech frames; adapting during speech would let a
+            // long monologue become the "floor" and read as silence.
+            noiseFloor += (db - noiseFloor) * 0.01
         }
-        return db > noiseFloor + margin
+        return speech
     }
 
     static func rms(_ buffer: AVAudioPCMBuffer) -> Float {

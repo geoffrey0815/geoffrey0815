@@ -62,6 +62,23 @@ import Testing
         #expect(feed(&monitor, speech: false, from: 55, to: 104).isEmpty)
     }
 
+    @Test func speechStartingJustBeforeTimeoutIsNotCutOff() {
+        var monitor = SilenceMonitor(configuration: config)
+        _ = feed(&monitor, speech: false, from: 0, to: 59.8)
+        // Speech begins 0.2 s before the timeout and is confirmed 0.3 s after it.
+        let events = feed(&monitor, speech: true, from: 59.8, to: 61)
+        #expect(!events.contains { $0.1 == .timeout })
+        #expect(events.map(\.1) == [.warningCancelled])
+    }
+
+    @Test func briefNoiseAtTimeoutDefersButStillStops() {
+        var monitor = SilenceMonitor(configuration: config)
+        _ = feed(&monitor, speech: false, from: 0, to: 59.8)
+        #expect(feed(&monitor, speech: true, from: 59.8, to: 60.1).isEmpty) // a cough
+        let events = feed(&monitor, speech: false, from: 60.1, to: 61)
+        #expect(events.first?.1 == .timeout)
+    }
+
     @Test func warningLeadIsClampedToTimeout() {
         let clamped = SilenceMonitor.Configuration(timeout: 5, warningLead: 99)
         #expect(clamped.warningLead == 5)

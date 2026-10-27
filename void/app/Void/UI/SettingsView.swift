@@ -12,6 +12,11 @@ struct SettingsView: View {
 
     @State private var secret = Keychain.string(for: Keychain.webhookSecret) ?? ""
     @State private var authorization = Keychain.string(for: Keychain.webhookAuthorization) ?? ""
+    @State private var saveError: String?
+
+    private var webhookURLIsInvalid: Bool {
+        !webhookURL.trimmingCharacters(in: .whitespaces).isEmpty && AppSettings.webhookURL == nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,6 +33,12 @@ struct SettingsView: View {
                 } header: {
                     Text("Webhook")
                 } footer: {
+                    if webhookURLIsInvalid {
+                        Text("https:// 로 시작하는 주소만 쓸 수 있습니다.").fontWeight(.semibold)
+                    }
+                    if let saveError {
+                        Text(saveError).fontWeight(.semibold)
+                    }
                     Text("녹음이 끝나면 요약을 이 주소로 보냅니다. 앱이 기기 밖으로 보내는 데이터는 이것뿐입니다. 비밀키를 넣으면 X-Void-Signature 헤더로 서명합니다.")
                 }
 
@@ -62,9 +73,13 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 Button("완료") {
-                    Keychain.set(secret, for: Keychain.webhookSecret)
-                    Keychain.set(authorization, for: Keychain.webhookAuthorization)
-                    dismiss()
+                    let saved = Keychain.set(secret, for: Keychain.webhookSecret)
+                        && Keychain.set(authorization, for: Keychain.webhookAuthorization)
+                    if saved {
+                        dismiss()
+                    } else {
+                        saveError = "비밀키를 저장하지 못했습니다. 다시 시도해 주세요."
+                    }
                 }
                 .fontWeight(.semibold)
                 .tint(Theme.ink)

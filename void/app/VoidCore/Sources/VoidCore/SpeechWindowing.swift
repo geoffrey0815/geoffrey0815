@@ -21,7 +21,9 @@ public enum SpeechWindowing {
 
     /// - Parameters:
     ///   - spans: speech spans in time order.
-    ///   - maxWindow: target window length; neighbours are merged while the window stays within it.
+    ///   - maxWindow: merge target: neighbours are merged only while the window stays within
+    ///     it. A single span between `maxWindow` and `hardLimit` is kept whole on purpose;
+    ///     cutting speech the engine can take in one pass would only lose context.
     ///   - maxGap: silence longer than this always starts a new window (a topic or speaker change is likely).
     ///   - hardLimit: the engine's input limit (Whisper: 30 s). Longer spans are split, never truncated.
     public static func windows(

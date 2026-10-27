@@ -3,6 +3,7 @@ import AVFoundation
 import Foundation
 import Observation
 import SwiftData
+import UIKit
 import VoidCore
 
 /// Single source of truth for "are we recording". Driven by the UI and by App Intents
@@ -33,6 +34,8 @@ final class RecordingController {
     private var interruptionTimeout: Task<Void, Never>?
     private var liveTranscriber: LiveTranscriber?
     private var lastFrameTime: TimeInterval = 0
+    /// Set while `start` is suspended (permission prompt), so a second tap cannot start twice.
+    private var isStarting = false
 
     var currentMeetingID: String? { meeting?.id }
 
@@ -49,7 +52,9 @@ final class RecordingController {
     }
 
     func start() async throws {
-        guard !isRecording else { return }
+        guard !isRecording, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
         lastError = nil
 
         guard await AVAudioApplication.requestRecordPermission() else {
@@ -71,18 +76,31 @@ final class RecordingController {
             throw error
         }
 
+        // AudioRecordingIntent requires a Live Activity for the whole recording; without
+        // one iOS stops background audio. Inside the app the recording can go on without it.
+        let startedAt = meeting.startedAt
+        let activityStarted = startLiveActivity(startedAt: startedAt)
+        if !activityStarted, UIApplication.shared.applicationState != .active {
+            capture.stop()
+            capture.onBuffer = nil
+            live.cancel()
+            try? FileManager.default.removeItem(at: url)
+            lastError = RecordingError.liveActivityUnavailable.errorDescription
+            throw RecordingError.liveActivityUnavailable
+        }
+
         let context = Persistence.container.mainContext
         context.insert(meeting)
-        try? context.save()
+        if !Persistence.save(context) {
+            lastError = "회의를 저장하지 못했습니다. 저장 공간을 확인해 주세요."
+        }
         self.meeting = meeting
         liveTranscriber = live
 
-        let startedAt = meeting.startedAt
         phase = .recording(startedAt: startedAt)
         autoStopAt = nil
         lastFrameTime = 0
         monitor = SilenceMonitor(configuration: .init(timeout: TimeInterval(AppSettings.silenceMinutes * 60)))
-        startLiveActivity(startedAt: startedAt)
 
         framesTask = Task { [weak self] in
             for await event in events {
@@ -107,19 +125,22 @@ final class RecordingController {
         autoStopAt = nil
         level = 0
         self.meeting = nil
-        await endLiveActivity()
 
         meeting.endedAt = .now
         meeting.endReason = reason
         meeting.status = .transcribing
-        try? Persistence.container.mainContext.save()
+        Persistence.save(Persistence.container.mainContext)
 
         let id = meeting.id
         Task {
-            // Usually only the last few seconds are left to transcribe.
-            let transcript = try? await live?.finish()
-            await ProcessingPipeline.shared.process(meetingID: id, liveTranscript: transcript)
+            // Recording may have been stopped from the Lock Screen; ask for time to finish.
+            await withBackgroundTime("void.process") {
+                // Usually only the last few seconds are left to transcribe.
+                let transcript = try? await live?.finish()
+                await ProcessingPipeline.shared.process(meetingID: id, liveTranscript: transcript)
+            }
         }
+        await endLiveActivity()
     }
 
     func keepRecording() async {
@@ -173,13 +194,14 @@ final class RecordingController {
 
     // MARK: Live Activity
 
-    private func startLiveActivity(startedAt: Date) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    private func startLiveActivity(startedAt: Date) -> Bool {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
         let state = RecordingAttributes.ContentState(startedAt: startedAt, autoStopAt: nil)
         activity = try? Activity.request(
             attributes: RecordingAttributes(),
             content: .init(state: state, staleDate: nil)
         )
+        return activity != nil
     }
 
     private func updateLiveActivity() async {
@@ -189,17 +211,43 @@ final class RecordingController {
     }
 
     private func endLiveActivity() async {
-        await activity?.end(nil, dismissalPolicy: .immediate)
+        // Detach first: a recording started while this awaits must keep its own activity.
+        let ending = activity
         activity = nil
+        await ending?.end(nil, dismissalPolicy: .immediate)
     }
+}
+
+/// Runs `body` with a UIKit background-task assertion so work started from the Lock Screen
+/// or a widget is not suspended immediately. Launch-time recovery covers the rest.
+@MainActor
+func withBackgroundTime(_ name: String, _ body: () async -> Void) async {
+    // The expiration handler is @Sendable, so the identifier lives in a main-actor box
+    // rather than a captured var.
+    @MainActor final class Assertion {
+        var id = UIBackgroundTaskIdentifier.invalid
+        func end() {
+            guard id != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(id)
+            id = .invalid
+        }
+    }
+    let assertion = Assertion()
+    assertion.id = UIApplication.shared.beginBackgroundTask(withName: name) {
+        MainActor.assumeIsolated { assertion.end() }
+    }
+    await body()
+    assertion.end()
 }
 
 enum RecordingError: LocalizedError {
     case microphoneDenied
+    case liveActivityUnavailable
 
     var errorDescription: String? {
         switch self {
         case .microphoneDenied: "마이크 권한이 없습니다."
+        case .liveActivityUnavailable: "앱 밖에서 녹음하려면 설정 > void에서 실시간 현황(Live Activity)을 켜 주세요."
         }
     }
 }

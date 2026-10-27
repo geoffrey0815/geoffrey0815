@@ -42,3 +42,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build | tee build.log | grep -E "error:|warning: .*(Sendable|actor|concurrency)|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
+
+  spikes:
+    name: Spike benches build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - run: swift build --package-path void/spikes/A-stt-bench
+      - run: swift build --package-path void/spikes/B-summary-bench

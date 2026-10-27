@@ -53,6 +53,12 @@ struct MeetingDetailView: View {
         .background(Theme.canvas.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if meeting.status == .failed, meeting.audioURL != nil {
+                Button("다시 처리", systemImage: "arrow.clockwise") {
+                    Task { await ProcessingPipeline.shared.reprocess(meetingID: meeting.id) }
+                }
+                .tint(Theme.ink)
+            }
             if meeting.status == .ready, AppSettings.webhookURL != nil {
                 Button("다시 보내기", systemImage: "arrow.up.circle") {
                     Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }

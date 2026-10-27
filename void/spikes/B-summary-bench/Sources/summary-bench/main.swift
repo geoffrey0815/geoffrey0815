@@ -73,19 +73,51 @@ for (index, chunk) in chunks.enumerated() {
     print(String(format: "  chunk %d/%d  %.1fs", index + 1, chunks.count, Date().timeIntervalSince(start)))
 }
 
-// Reduce: merge the per-chunk notes into one summary.
-let merged = notes.enumerated().map { index, note in
-    """
-    [구간 \(index + 1)]
-    핵심: \(note.points.joined(separator: " / "))
-    결정: \(note.decisions.joined(separator: " / "))
-    할 일: \(note.actionItems.map { "\($0.task) (\($0.owner))" }.joined(separator: " / "))
-    """
-}.joined(separator: "\n\n")
+// Reduce hierarchically (same as the app's Summarizer): merge groups of notes that fit
+// the budget, at least two at a time, until everything fits one final request.
+func render(_ notes: [ChunkNotes]) -> String {
+    notes.map { note in
+        """
+        핵심: \(note.points.joined(separator: " / "))
+        결정: \(note.decisions.joined(separator: " / "))
+        할 일: \(note.actionItems.map { "\($0.task) (\($0.owner))" }.joined(separator: " / "))
+        """
+    }.joined(separator: "\n\n")
+}
+
+var round = 0
+while notes.count > 1, render(notes).count > budget {
+    round += 1
+    var groups: [[ChunkNotes]] = []
+    var current: [ChunkNotes] = []
+    for note in notes {
+        if current.count >= 2, render(current + [note]).count > budget {
+            groups.append(current)
+            current = []
+        }
+        current.append(note)
+    }
+    if !current.isEmpty { groups.append(current) }
+
+    var merged: [ChunkNotes] = []
+    for group in groups {
+        guard group.count > 1 else {
+            merged.append(contentsOf: group)
+            continue
+        }
+        let session = LanguageModelSession(instructions: instructions)
+        merged.append(try await session.respond(
+            to: "다음은 한 회의를 구간별로 정리한 메모다. 중복을 합쳐 하나의 메모로 정리하라.\n\n\(render(group))",
+            generating: ChunkNotes.self
+        ).content)
+    }
+    print(String(format: "  reduce round %d: %d → %d notes  %.1fs", round, notes.count, merged.count, Date().timeIntervalSince(start)))
+    notes = merged
+}
 
 let session = LanguageModelSession(instructions: instructions)
 let final = try await session.respond(
-    to: "다음은 한 회의를 구간별로 정리한 메모다. 중복을 합쳐 최종 회의록을 만들어라.\n\n\(merged)",
+    to: "다음은 한 회의를 구간별로 정리한 메모다. 중복을 합쳐 최종 회의록을 만들어라.\n\n\(render(notes))",
     generating: MeetingSummary.self
 ).content
 let elapsed = Date().timeIntervalSince(start)

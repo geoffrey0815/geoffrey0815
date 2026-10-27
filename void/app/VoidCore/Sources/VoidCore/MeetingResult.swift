@@ -17,6 +17,18 @@ public struct MeetingResult: Codable, Sendable, Equatable {
             self.owner = owner
             self.due = due
         }
+
+        enum CodingKeys: String, CodingKey {
+            case task, owner, due
+        }
+
+        /// Writes missing owner/due as explicit `null`, matching the documented payload shape.
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(task, forKey: .task)
+            try container.encode(owner, forKey: .owner)
+            try container.encode(due, forKey: .due)
+        }
     }
 
     public struct Segment: Codable, Sendable, Equatable {

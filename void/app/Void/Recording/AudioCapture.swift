@@ -28,6 +28,9 @@ final class AudioCapture: @unchecked Sendable {
     private var writeFailed = false
     private var continuation: AsyncStream<Event>.Continuation?
     private var observers: [NSObjectProtocol] = []
+    /// Guards `file` and `continuation` between the tap thread and `stop()`, so the file is
+    /// never closed while a buffer is being written to it.
+    private let lock = NSLock()
     /// Receives every microphone buffer on the tap thread (live transcription). Set before `start`.
     var onBuffer: ((AVAudioPCMBuffer) -> Void)?
 
@@ -55,7 +58,12 @@ final class AudioCapture: @unchecked Sendable {
         let (stream, continuation) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .bufferingNewest(256))
         self.continuation = continuation
 
-        try startEngine()
+        do {
+            try startEngine()
+        } catch {
+            stop() // roll back the tap, file, stream and session so the next start is clean
+            throw error
+        }
         observeSession()
         return stream
     }
@@ -65,9 +73,11 @@ final class AudioCapture: @unchecked Sendable {
         observers = []
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        file = nil // closing the file finalizes the AAC container
-        continuation?.finish()
-        continuation = nil
+        lock.withLock {
+            file = nil // closing the file finalizes the AAC container
+            continuation?.finish()
+            continuation = nil
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -133,8 +143,11 @@ final class AudioCapture: @unchecked Sendable {
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer, sampleRate: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let file else { return } // stopped while this buffer was in flight
         do {
-            try file?.write(from: buffer)
+            try file.write(from: buffer)
         } catch {
             if !writeFailed {
                 writeFailed = true

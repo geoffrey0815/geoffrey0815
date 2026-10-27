@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftData
 import VoidCore
 
@@ -104,11 +105,33 @@ final class Meeting {
 
 @MainActor
 enum Persistence {
+    private static let logger = Logger(subsystem: "void", category: "persistence")
+
+    /// The store lives in its own folder excluded from iCloud/device backup, like the
+    /// recordings: transcripts and summaries must not leave the device that way either.
     static let container: ModelContainer = {
+        var directory = URL.applicationSupportDirectory.appendingPathComponent("Store", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? directory.setResourceValues(values)
         do {
-            return try ModelContainer(for: Meeting.self)
+            let configuration = ModelConfiguration(url: directory.appendingPathComponent("void.store"))
+            return try ModelContainer(for: Meeting.self, configurations: configuration)
         } catch {
             fatalError("Could not open the meeting store: \(error)")
         }
     }()
+
+    /// Saves and logs failures (disk full is the realistic case). Returns whether it saved.
+    @discardableResult
+    static func save(_ context: ModelContext) -> Bool {
+        do {
+            try context.save()
+            return true
+        } catch {
+            logger.error("SwiftData save failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
 }

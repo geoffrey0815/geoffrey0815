@@ -59,7 +59,12 @@
 }
 ```
 
-- 서명: `X-Void-Signature: sha256=<HMAC(body, secret)>` — 수신 측 위조 검증용
+- 서명 (비밀키 설정 시): 수신 측 위조·재전송 검증용
+  - `X-Void-Timestamp: <unix 초>`
+  - `X-Void-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<body>")>` — 본문 앞에 타임스탬프와 `.`을 붙여 서명
+  - 수신 측은 같은 방식으로 계산해 상수 시간 비교하고, 타임스탬프가 5분 이상 지난 요청은 버린다
+- `Idempotency-Key: <meeting id>` — 재시도로 같은 회의가 두 번 와도 수신 측에서 중복 제거
+- 값이 없는 `owner`/`due`는 키를 생략하지 않고 `null`로 보낸다
 - transcript 포함 여부는 설정으로 선택 (기본: 포함 안 함 → 유출 표면 최소화)
 
 ## 6. 프라이버시 원칙

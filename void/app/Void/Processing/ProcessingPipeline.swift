@@ -15,6 +15,8 @@ final class ProcessingPipeline {
     /// Meetings being processed by this process, so recovery never runs one twice.
     private var inFlight: Set<String> = []
     private var didRecover = false
+    /// Meetings with a webhook request in flight; a resend or retry for them is dropped.
+    private var delivering: Set<String> = []
 
     /// - Parameter liveTranscript: transcript produced while recording; when missing or
     ///   empty (live transcription failed), the recorded file is transcribed instead.
@@ -46,8 +48,12 @@ final class ProcessingPipeline {
             save()
 
             if AppSettings.deleteAudioAfterProcessing {
-                try? FileManager.default.removeItem(at: audioURL)
-                meeting.audioFileName = nil
+                do {
+                    try FileManager.default.removeItem(at: audioURL)
+                    meeting.audioFileName = nil
+                } catch {
+                    meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
+                }
                 save()
             }
         } catch {
@@ -61,7 +67,9 @@ final class ProcessingPipeline {
 
     /// Sends a ready meeting. `manual` (the "다시 보내기" button) resets the retry budget.
     func deliver(meetingID: String, manual: Bool = false) async {
-        guard let meeting = fetch(meetingID), meeting.status == .ready else { return }
+        guard !delivering.contains(meetingID), let meeting = fetch(meetingID), meeting.status == .ready else { return }
+        delivering.insert(meetingID)
+        defer { delivering.remove(meetingID) }
         guard let url = AppSettings.webhookURL else {
             meeting.delivery = .notConfigured
             meeting.nextDeliveryAt = nil
@@ -149,7 +157,18 @@ final class ProcessingPipeline {
         try? context.fetch(FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == id })).first
     }
 
+    /// "다시 처리" for a failed meeting whose audio is still on the device.
+    func reprocess(meetingID: String) async {
+        guard let meeting = fetch(meetingID), meeting.status == .failed, meeting.audioURL != nil else { return }
+        meeting.errorMessage = nil
+        meeting.status = .transcribing
+        save()
+        await withBackgroundTime("void.reprocess") {
+            await process(meetingID: meetingID)
+        }
+    }
+
     private func save() {
-        try? context.save()
+        Persistence.save(context)
     }
 }

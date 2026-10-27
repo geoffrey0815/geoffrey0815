@@ -61,20 +61,55 @@ struct Summarizer {
             notes.append(response.content)
         }
 
-        // Reduce: merge the per-part notes into the final summary.
-        let merged = notes.enumerated().map { index, note in
+        // Reduce hierarchically: merge groups of notes that fit the budget into one set of
+        // notes, repeating until everything fits in a single final request.
+        while notes.count > 1, render(notes).count > maxCharactersPerChunk {
+            var merged: [ChunkNotes] = []
+            for group in batches(of: notes) {
+                guard group.count > 1 else {
+                    merged.append(contentsOf: group)
+                    continue
+                }
+                let session = LanguageModelSession(instructions: instructions)
+                merged.append(try await session.respond(
+                    to: "Notes from consecutive parts of one meeting. Merge them, dropping duplicates.\n\n\(render(group))",
+                    generating: ChunkNotes.self
+                ).content)
+            }
+            notes = merged
+        }
+
+        let session = LanguageModelSession(instructions: instructions)
+        return try await session.respond(
+            to: "Notes from consecutive parts of one meeting. Merge duplicates and write the final notes.\n\n\(render(notes))",
+            generating: GeneratedSummary.self
+        ).content
+    }
+
+    private func render(_ notes: [ChunkNotes]) -> String {
+        notes.map { note in
             """
-            [Part \(index + 1)]
             Points: \(note.points.joined(separator: " / "))
             Decisions: \(note.decisions.joined(separator: " / "))
             Action items: \(note.actionItems.map { "\($0.task) (\($0.owner))" }.joined(separator: " / "))
             """
         }.joined(separator: "\n\n")
-        let session = LanguageModelSession(instructions: instructions)
-        return try await session.respond(
-            to: "These are notes from consecutive parts of one meeting. Merge duplicates and write the final notes.\n\n\(merged)",
-            generating: GeneratedSummary.self
-        ).content
+    }
+
+    /// Consecutive groups whose rendered notes stay within the chunk budget. Groups always
+    /// take at least two notes, so every round at least halves the count and terminates.
+    private func batches(of notes: [ChunkNotes]) -> [[ChunkNotes]] {
+        var groups: [[ChunkNotes]] = []
+        var current: [ChunkNotes] = []
+        for note in notes {
+            if current.count >= 2, render(current + [note]).count > maxCharactersPerChunk {
+                groups.append(current)
+                current = []
+            }
+            current.append(note)
+        }
+        if !current.isEmpty { groups.append(current) }
+        return groups
     }
 }
 

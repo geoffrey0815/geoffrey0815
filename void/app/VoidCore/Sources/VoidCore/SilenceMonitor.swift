@@ -56,7 +56,10 @@ public struct SilenceMonitor: Sendable {
             if speechStart == nil { speechStart = time }
             // Only a sustained burst of speech counts as the meeting resuming.
             guard let speechStart, time - speechStart >= configuration.minSpeechDuration else {
-                return evaluateSilence(at: time)
+                // Speech is being confirmed: hold the timeout so a sentence that starts just
+                // before it is not cut off. If the burst turns out brief, the next silent
+                // frame evaluates the (still running) silence timer again.
+                return evaluateSilence(at: time, allowTimeout: false)
             }
             silenceStart = nil
             if warned {
@@ -82,9 +85,10 @@ public struct SilenceMonitor: Sendable {
         return nil
     }
 
-    private mutating func evaluateSilence(at time: TimeInterval) -> Event? {
+    private mutating func evaluateSilence(at time: TimeInterval, allowTimeout: Bool = true) -> Event? {
         let silence = silenceDuration(at: time)
         if silence >= configuration.timeout {
+            guard allowTimeout else { return nil }
             finished = true
             return .timeout
         }

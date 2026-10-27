@@ -23,6 +23,9 @@ import Testing
         #expect(json["started_at"] as? String == "2027-01-15T08:00:00Z")
         #expect(json["transcript"] == nil)
         #expect(json["version"] as? String == "1")
+        let item = try #require((json["action_items"] as? [[String: Any]])?.first)
+        #expect(item["due"] is NSNull) // nil is written as null, not dropped
+        #expect(item["owner"] as? String == "민지")
     }
 
     @Test func payloadRoundTrips() throws {
@@ -82,6 +85,14 @@ import Testing
         let chunks = TranscriptChunker.chunks(of: segments, maxCharacters: 100)
         #expect(chunks.allSatisfy { $0.count <= 100 })
         #expect(chunks.joined(separator: "\n").filter { $0 == "가" }.count == 400)
+    }
+
+    @Test func chunkerSplitsOversizedSegmentAtSentenceEnd() {
+        let sentence = "이번 분기 목표를 정했다. " // 15 characters
+        let text = String(repeating: sentence, count: 10)
+        let chunks = TranscriptChunker.chunks(of: [.init(start: 0, end: 1, text: text)], maxCharacters: 100)
+        #expect(chunks.allSatisfy { $0.count <= 100 && $0.hasSuffix(".") })
+        #expect(chunks.joined(separator: " ") == text.trimmingCharacters(in: .whitespaces))
     }
 
     @Test func chunkerHardSplitsOversizedSegment() {

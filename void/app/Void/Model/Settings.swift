@@ -13,13 +13,15 @@ enum SettingsKey {
 }
 
 enum AppSettings {
-    /// Spike D: the longest natural pause in a real 52-min talk was 56 s, so never allow < 2 min.
+    /// Spike D: replaying the app's VAD logic on a real 52-min talk found a 61 s pause,
+    /// so a 1-min timeout cut it short. Never allow < 2 min.
     static let silenceMinutesRange = 2...30
 
     static var webhookURL: URL? {
         guard let raw = UserDefaults.standard.string(forKey: SettingsKey.webhookURL)?
             .trimmingCharacters(in: .whitespaces), !raw.isEmpty,
-            let url = URL(string: raw), url.scheme == "https" || url.scheme == "http"
+            // HTTPS only: the payload is the meeting itself, and ATS blocks plain HTTP anyway.
+            let url = URL(string: raw), url.scheme?.lowercased() == "https", url.host() != nil
         else { return nil }
         return url
     }
@@ -65,16 +67,25 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func set(_ value: String?, for key: String) {
+    /// Stores `value` (nil or empty deletes). Updates in place, so a failed write never
+    /// leaves the old secret deleted. Returns whether the Keychain accepted the change.
+    @discardableResult
+    static func set(_ value: String?, for key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(query as CFDictionary)
-        guard let value, !value.isEmpty else { return }
+        guard let value, !value.isEmpty else {
+            let status = SecItemDelete(query as CFDictionary)
+            return status == errSecSuccess || status == errSecItemNotFound
+        }
+        let data = Data(value.utf8)
+        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecSuccess { return true }
+        guard status == errSecItemNotFound else { return false }
         var attributes = query
-        attributes[kSecValueData as String] = Data(value.utf8)
+        attributes[kSecValueData as String] = data
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(attributes as CFDictionary, nil)
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 }

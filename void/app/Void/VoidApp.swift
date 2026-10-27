@@ -16,8 +16,8 @@ struct VoidApp: App {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task {
-                    await ProcessingPipeline.shared.retryDueDeliveries()
                     ProcessingPipeline.shared.purgeExpiredAudio()
+                    await ProcessingPipeline.shared.retryDueDeliveries()
                 }
             }
         }

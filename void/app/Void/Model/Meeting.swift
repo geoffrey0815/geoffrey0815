@@ -16,6 +16,8 @@ final class Meeting {
     @Attribute(.unique) var id: String
     var startedAt: Date
     var endedAt: Date?
+    /// When the meeting last became `.ready`; audio retention counts from here.
+    var processedAt: Date?
     var endReasonRaw: String?
     var statusRaw: String
     var deliveryRaw: String

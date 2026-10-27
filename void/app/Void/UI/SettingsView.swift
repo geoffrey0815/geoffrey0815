@@ -25,13 +25,20 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://", text: $webhookURL)
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("서명 비밀키 (선택)", text: $secret)
-                    SecureField("Authorization 헤더 (선택)", text: $authorization)
+                    Group {
+                        TextField("https://", text: $webhookURL)
+                            .keyboardType(.URL)
+                            .textContentType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("서명 비밀키 (선택)", text: $secret)
+                        SecureField("Authorization 헤더 (선택)", text: $authorization)
+                    }
+                    // A test result only describes the values it was sent with.
+                    .disabled(isTesting)
+                    .onChange(of: webhookURL) { testResult = nil }
+                    .onChange(of: secret) { testResult = nil }
+                    .onChange(of: authorization) { testResult = nil }
                     Toggle("원문 포함", isOn: $includeTranscript)
                     Button(isTesting ? "보내는 중…" : "테스트 전송") {
                         Task { await sendTest() }

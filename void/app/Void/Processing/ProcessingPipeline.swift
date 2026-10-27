@@ -44,6 +44,7 @@ final class ProcessingPipeline {
                 .init(task: $0.task, owner: $0.owner.isEmpty ? nil : $0.owner)
             }
             meeting.status = .ready
+            meeting.processedAt = .now
             meeting.errorMessage = nil
             save()
 
@@ -145,29 +146,36 @@ final class ProcessingPipeline {
                 break
             }
         }
-        await retryDueDeliveries()
+        // Purge first: it is local and quick, retries may wait on the network.
         purgeExpiredAudio()
+        await retryDueDeliveries()
     }
 
     /// Deletes recordings of processed meetings older than the retention setting. Failed
     /// meetings keep their audio so they can be reprocessed.
+    /// Retention counts from processing, so a meeting reprocessed late still keeps its audio
+    /// for the full period. With 0 days, switching the setting clears existing recordings too.
     func purgeExpiredAudio() {
-        guard let days = AppSettings.audioRetentionDays, days > 0 else { return }
+        guard let days = AppSettings.audioRetentionDays else { return }
         let cutoff = Date.now.addingTimeInterval(-TimeInterval(days) * 86_400)
         let ready = Meeting.Status.ready.rawValue
-        let expired = (try? context.fetch(FetchDescriptor<Meeting>(
-            predicate: #Predicate { $0.statusRaw == ready && $0.audioFileName != nil && $0.startedAt < cutoff }
+        let candidates = (try? context.fetch(FetchDescriptor<Meeting>(
+            predicate: #Predicate { $0.statusRaw == ready && $0.audioFileName != nil }
         ))) ?? []
+        let expired = candidates.filter { ($0.processedAt ?? $0.endedAt ?? $0.startedAt) <= cutoff }
         guard !expired.isEmpty else { return }
         expired.forEach(deleteAudio(of:))
         save()
     }
 
-    /// Clears the reference only once the file is really gone, so nothing is orphaned.
+    /// Clears the reference only once the file is really gone, so nothing is orphaned. A file
+    /// that is already missing (deleted before a save was lost) just clears the stale reference.
     private func deleteAudio(of meeting: Meeting) {
         guard let url = meeting.audioURL else { return }
         do {
-            try FileManager.default.removeItem(at: url)
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
             meeting.audioFileName = nil
         } catch {
             meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"

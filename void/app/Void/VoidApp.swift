@@ -15,7 +15,10 @@ struct VoidApp: App {
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await ProcessingPipeline.shared.retryDueDeliveries() }
+                Task {
+                    await ProcessingPipeline.shared.retryDueDeliveries()
+                    ProcessingPipeline.shared.purgeExpiredAudio()
+                }
             }
         }
         .backgroundTask(.appRefresh(WebhookDelivery.refreshTaskID)) {

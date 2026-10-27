@@ -47,13 +47,8 @@ final class ProcessingPipeline {
             meeting.errorMessage = nil
             save()
 
-            if AppSettings.deleteAudioAfterProcessing {
-                do {
-                    try FileManager.default.removeItem(at: audioURL)
-                    meeting.audioFileName = nil
-                } catch {
-                    meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
-                }
+            if AppSettings.audioRetentionDays == 0 {
+                deleteAudio(of: meeting)
                 save()
             }
         } catch {
@@ -151,6 +146,32 @@ final class ProcessingPipeline {
             }
         }
         await retryDueDeliveries()
+        purgeExpiredAudio()
+    }
+
+    /// Deletes recordings of processed meetings older than the retention setting. Failed
+    /// meetings keep their audio so they can be reprocessed.
+    func purgeExpiredAudio() {
+        guard let days = AppSettings.audioRetentionDays, days > 0 else { return }
+        let cutoff = Date.now.addingTimeInterval(-TimeInterval(days) * 86_400)
+        let ready = Meeting.Status.ready.rawValue
+        let expired = (try? context.fetch(FetchDescriptor<Meeting>(
+            predicate: #Predicate { $0.statusRaw == ready && $0.audioFileName != nil && $0.startedAt < cutoff }
+        ))) ?? []
+        guard !expired.isEmpty else { return }
+        expired.forEach(deleteAudio(of:))
+        save()
+    }
+
+    /// Clears the reference only once the file is really gone, so nothing is orphaned.
+    private func deleteAudio(of meeting: Meeting) {
+        guard let url = meeting.audioURL else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+            meeting.audioFileName = nil
+        } catch {
+            meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
+        }
     }
 
     private func fetch(_ id: String) -> Meeting? {

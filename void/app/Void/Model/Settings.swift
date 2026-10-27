@@ -9,7 +9,7 @@ enum SettingsKey {
     static let silenceMinutes = "silenceMinutes"
     static let recognitionLocale = "recognitionLocale"
     static let summaryLanguage = "summaryLanguage"
-    static let deleteAudioAfterProcessing = "deleteAudioAfterProcessing"
+    static let audioRetentionDays = "audioRetentionDays"
 }
 
 enum AppSettings {
@@ -44,8 +44,11 @@ enum AppSettings {
         UserDefaults.standard.string(forKey: SettingsKey.summaryLanguage) ?? "ko"
     }
 
-    static var deleteAudioAfterProcessing: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKey.deleteAudioAfterProcessing)
+    /// How long recordings are kept after a meeting is processed: 0 deletes right away,
+    /// nil keeps them until the user deletes the meeting (default).
+    static var audioRetentionDays: Int? {
+        let days = UserDefaults.standard.object(forKey: SettingsKey.audioRetentionDays) as? Int ?? -1
+        return days < 0 ? nil : days
     }
 }
 

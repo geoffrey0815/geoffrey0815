@@ -32,6 +32,26 @@ final class ScreenshotTests: XCTestCase {
         snap("04-record-attempt")
     }
 
+    func testDeleteFromContextMenu() {
+        let app = launch(dark: false)
+        let standup = app.descendants(matching: .any)["meeting-mtg_seed_standup"]
+        XCTAssertTrue(standup.waitForExistence(timeout: 15))
+        standup.press(forDuration: 1.2)
+        XCTAssertTrue(app.buttons["삭제"].waitForExistence(timeout: 5))
+        snap("07-context-menu")
+        app.buttons["삭제"].tap()
+        XCTAssertTrue(standup.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["meeting-mtg_seed_review"].exists)
+    }
+
+    func testEmptyState() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestSeed", "-uiTestEmpty"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["아직 회의가 없어요"].waitForExistence(timeout: 15))
+        snap("08-empty")
+    }
+
     private func walkScreens(dark: Bool) {
         let mode = dark ? "dark" : "light"
         let app = launch(dark: dark)

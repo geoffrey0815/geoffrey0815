@@ -74,6 +74,19 @@ final class Meeting {
         title.isEmpty ? startedAt.formatted(date: .abbreviated, time: .shortened) : title
     }
 
+    /// Readable notes for sharing or copying: title, date, summary, decisions, action items.
+    var plainText: String {
+        var lines = [displayTitle, startedAt.formatted(date: .long, time: .shortened)]
+        if !summary.isEmpty { lines += ["", summary] }
+        if !decisions.isEmpty { lines += ["", "결정사항"] + decisions.map { "• \($0)" } }
+        if !actionItems.isEmpty {
+            lines += ["", "할 일"] + actionItems.map { item in
+                "☐ \(item.task)" + (item.owner.map { " — \($0)" } ?? "") + (item.due.map { " (\($0))" } ?? "")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     func result(includeTranscript: Bool) -> MeetingResult {
         MeetingResult(
             id: id,

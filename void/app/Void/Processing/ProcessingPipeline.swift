@@ -189,6 +189,27 @@ final class ProcessingPipeline {
         try? context.fetch(FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == id })).first
     }
 
+    /// Deletes a meeting and its recording. Refused while it is still being recorded or
+    /// processed, so no task writes into a deleted record.
+    @discardableResult
+    func delete(meetingID: String) -> Bool {
+        guard meetingID != RecordingController.shared.currentMeetingID,
+              !inFlight.contains(meetingID),
+              let meeting = fetch(meetingID) else { return false }
+        if let url = meeting.audioURL, FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
+                save()
+                return false
+            }
+        }
+        context.delete(meeting)
+        save()
+        return true
+    }
+
     /// "다시 처리" for a failed meeting whose audio is still on the device.
     func reprocess(meetingID: String) async {
         guard let meeting = fetch(meetingID), meeting.status == .failed, meeting.audioURL != nil else { return }

@@ -21,6 +21,7 @@ enum UITestSupport {
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         let context = container.mainContext
+        if ProcessInfo.processInfo.arguments.contains("-uiTestEmpty") { return container }
         let now = Date.now
 
         let review = Meeting(startedAt: now.addingTimeInterval(-2 * 3600), language: "ko-KR")

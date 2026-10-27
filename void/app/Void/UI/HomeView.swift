@@ -13,6 +13,18 @@ struct HomeView: View {
                     recorderSection
                         .padding(.top, 24)
 
+                    if meetings.isEmpty {
+                        VStack(spacing: 6) {
+                            Text("아직 회의가 없어요")
+                                .font(.subheadline.weight(.semibold))
+                            Text("위젯이나 제어 센터에서도 바로 녹음할 수 있어요")
+                                .font(.footnote)
+                        }
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 24)
+                    }
+
                     LazyVStack(spacing: 12) {
                         ForEach(meetings) { meeting in
                             NavigationLink(value: meeting.id) {
@@ -20,6 +32,14 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("meeting-\(meeting.id)")
+                            .contextMenu {
+                                if meeting.status == .ready {
+                                    ShareLink(item: meeting.plainText) { Label("공유", systemImage: "square.and.arrow.up") }
+                                }
+                                Button("삭제", systemImage: "trash", role: .destructive) {
+                                    ProcessingPipeline.shared.delete(meetingID: meeting.id)
+                                }
+                            }
                         }
                     }
                 }

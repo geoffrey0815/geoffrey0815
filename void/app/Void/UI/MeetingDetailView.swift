@@ -1,8 +1,11 @@
 import SwiftUI
+import UIKit
 
 struct MeetingDetailView: View {
     let meeting: Meeting
+    @Environment(\.dismiss) private var dismiss
     @State private var showTranscript = false
+    @State private var confirmDelete = false
 
     var body: some View {
         ScrollView {
@@ -59,11 +62,29 @@ struct MeetingDetailView: View {
                 }
                 .tint(Theme.ink)
             }
-            if meeting.status == .ready, AppSettings.webhookURL != nil {
-                Button("다시 보내기", systemImage: "arrow.up.circle") {
-                    Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }
+            Menu("더보기", systemImage: "ellipsis") {
+                if meeting.status == .ready {
+                    ShareLink(item: meeting.plainText) { Label("공유", systemImage: "square.and.arrow.up") }
+                    Button("복사", systemImage: "doc.on.doc") { UIPasteboard.general.string = meeting.plainText }
+                    if AppSettings.webhookURL != nil {
+                        Button("Webhook 다시 보내기", systemImage: "arrow.up.circle") {
+                            Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }
+                        }
+                    }
                 }
-                .tint(Theme.ink)
+                Button("삭제", systemImage: "trash", role: .destructive) { confirmDelete = true }
+            }
+            .tint(Theme.ink)
+        }
+        .confirmationDialog("이 회의와 녹음을 삭제할까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("삭제", role: .destructive) {
+                // Leave the screen first: a view must not render a model that is gone.
+                let id = meeting.id
+                dismiss()
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    ProcessingPipeline.shared.delete(meetingID: id)
+                }
             }
         }
     }

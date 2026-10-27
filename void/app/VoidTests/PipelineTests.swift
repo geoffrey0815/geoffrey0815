@@ -187,6 +187,25 @@ final class PipelineTests: XCTestCase {
         XCTAssertNil(meeting.errorMessage)
     }
 
+    func testDeleteRemovesMeetingAndRecording() async throws {
+        let meeting = try makeMeeting(status: .ready)
+        let id = meeting.id
+        let url = try XCTUnwrap(meeting.audioURL)
+        XCTAssertTrue(pipeline.delete(meetingID: id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        let remaining = try container.mainContext.fetch(FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == id }))
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testPlainTextHasSummaryDecisionsAndTasks() async throws {
+        let meeting = try makeMeeting()
+        await pipeline.process(meetingID: meeting.id)
+        let text = meeting.plainText
+        XCTAssertTrue(text.hasPrefix("Q4 로드맵 리뷰"))
+        XCTAssertTrue(text.contains("• 출시는 12월 첫째 주"))
+        XCTAssertTrue(text.contains("☐ 공지 작성하기 — 민지"))
+    }
+
     func testDefaultRetentionKeepsAudio() async throws {
         let meeting = try makeMeeting(status: .ready, startedAt: .now.addingTimeInterval(-400 * 86_400))
         pipeline.purgeExpiredAudio()

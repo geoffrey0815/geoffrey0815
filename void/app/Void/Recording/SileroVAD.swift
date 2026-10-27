@@ -87,24 +87,12 @@ final class SileroVAD: VoiceActivityDetector {
     }
 
     private func resample(_ buffer: AVAudioPCMBuffer) -> [Float] {
-        if converter == nil || converter?.inputFormat != buffer.format {
+        if converter?.inputFormat != buffer.format {
             converter = AVAudioConverter(from: buffer.format, to: targetFormat)
         }
-        guard let converter else { return [] }
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * Self.sampleRate / buffer.format.sampleRate) + 1
-        guard let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return [] }
-        var supplied = false
-        var error: NSError?
-        converter.convert(to: output, error: &error) { _, status in
-            if supplied {
-                status.pointee = .noDataNow
-                return nil
-            }
-            supplied = true
-            status.pointee = .haveData
-            return buffer
-        }
-        guard error == nil, let samples = output.floatChannelData?[0] else { return [] }
+        guard let converter,
+              let output = buffer.converted(with: converter, to: targetFormat),
+              let samples = output.floatChannelData?[0] else { return [] }
         return Array(UnsafeBufferPointer(start: samples, count: Int(output.frameLength)))
     }
 

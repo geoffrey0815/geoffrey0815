@@ -16,7 +16,9 @@ final class ProcessingPipeline {
     private var inFlight: Set<String> = []
     private var didRecover = false
 
-    func process(meetingID: String) async {
+    /// - Parameter liveTranscript: transcript produced while recording; when missing or
+    ///   empty (live transcription failed), the recorded file is transcribed instead.
+    func process(meetingID: String, liveTranscript: [MeetingResult.Segment]? = nil) async {
         guard !inFlight.contains(meetingID), let meeting = fetch(meetingID), let audioURL = meeting.audioURL else { return }
         inFlight.insert(meetingID)
         defer { inFlight.remove(meetingID) }
@@ -24,7 +26,11 @@ final class ProcessingPipeline {
             meeting.status = .transcribing
             save()
             let locale = Locale(identifier: meeting.language)
-            meeting.transcript = try await transcriber.transcribe(fileAt: audioURL, locale: locale)
+            if let liveTranscript, !liveTranscript.isEmpty {
+                meeting.transcript = liveTranscript
+            } else {
+                meeting.transcript = try await transcriber.transcribe(fileAt: audioURL, locale: locale)
+            }
 
             meeting.status = .summarizing
             save()

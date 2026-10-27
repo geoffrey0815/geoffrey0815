@@ -28,6 +28,8 @@ final class AudioCapture: @unchecked Sendable {
     private var writeFailed = false
     private var continuation: AsyncStream<Event>.Continuation?
     private var observers: [NSObjectProtocol] = []
+    /// Receives every microphone buffer on the tap thread (live transcription). Set before `start`.
+    var onBuffer: ((AVAudioPCMBuffer) -> Void)?
 
     func start(writingTo url: URL) throws -> AsyncStream<Event> {
         let session = AVAudioSession.sharedInstance()
@@ -140,6 +142,7 @@ final class AudioCapture: @unchecked Sendable {
             }
             return
         }
+        onBuffer?(buffer)
         let time = Double(framesWritten) / sampleRate
         framesWritten += AVAudioFramePosition(buffer.frameLength)
         continuation?.yield(.frame(Frame(time: time, isSpeech: vad.isSpeech(buffer), level: EnergyVAD.rms(buffer))))

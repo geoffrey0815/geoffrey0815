@@ -46,10 +46,12 @@ struct SpeechAnalyzerTranscriber: Transcriber {
 
 enum TranscriberError: LocalizedError {
     case unsupportedLocale(String)
+    case noAudioFormat
 
     var errorDescription: String? {
         switch self {
         case .unsupportedLocale(let id): "이 기기는 \(id) 받아쓰기를 지원하지 않습니다."
+        case .noAudioFormat: "받아쓰기용 오디오 형식을 정하지 못했습니다."
         }
     }
 }

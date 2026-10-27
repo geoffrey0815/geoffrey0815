@@ -31,6 +31,7 @@ final class RecordingController {
     private var activity: Activity<RecordingAttributes>?
     private var framesTask: Task<Void, Never>?
     private var interruptionTimeout: Task<Void, Never>?
+    private var liveTranscriber: LiveTranscriber?
     private var lastFrameTime: TimeInterval = 0
 
     var currentMeetingID: String? { meeting?.id }
@@ -58,10 +59,14 @@ final class RecordingController {
 
         let meeting = Meeting(language: AppSettings.recognitionLocale.identifier)
         guard let url = meeting.audioURL else { return }
+        let live = LiveTranscriber(locale: AppSettings.recognitionLocale)
+        capture.onBuffer = { live.append($0) }
         let events: AsyncStream<AudioCapture.Event>
         do {
             events = try capture.start(writingTo: url)
         } catch {
+            live.cancel()
+            capture.onBuffer = nil
             lastError = "녹음을 시작하지 못했습니다: \(error.localizedDescription)"
             throw error
         }
@@ -70,6 +75,7 @@ final class RecordingController {
         context.insert(meeting)
         try? context.save()
         self.meeting = meeting
+        liveTranscriber = live
 
         let startedAt = meeting.startedAt
         phase = .recording(startedAt: startedAt)
@@ -89,6 +95,9 @@ final class RecordingController {
     func stop(reason: MeetingResult.EndReason) async {
         guard isRecording, let meeting else { return }
         capture.stop()
+        capture.onBuffer = nil
+        let live = liveTranscriber
+        liveTranscriber = nil
         framesTask?.cancel()
         framesTask = nil
         interruptionTimeout?.cancel()
@@ -106,7 +115,11 @@ final class RecordingController {
         try? Persistence.container.mainContext.save()
 
         let id = meeting.id
-        Task { await ProcessingPipeline.shared.process(meetingID: id) }
+        Task {
+            // Usually only the last few seconds are left to transcribe.
+            let transcript = try? await live?.finish()
+            await ProcessingPipeline.shared.process(meetingID: id, liveTranscript: transcript)
+        }
     }
 
     func keepRecording() async {

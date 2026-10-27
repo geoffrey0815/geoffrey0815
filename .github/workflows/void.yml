@@ -168,6 +168,15 @@ jobs:
           test -f "$APP/silero_vad.onnx"
           test -d "$APP/PlugIns/VoidWidgets.appex"
           test "$(strings "$APP/Void" | grep -c uiTestSeed)" = "0"
+          # App Store rejects an extension whose version differs from its app.
+          WIDGET="$APP/PlugIns/VoidWidgets.appex/Info.plist"
+          for key in CFBundleShortVersionString CFBundleVersion; do
+            app_v=$(/usr/libexec/PlistBuddy -c "Print :$key" "$APP/Info.plist")
+            ext_v=$(/usr/libexec/PlistBuddy -c "Print :$key" "$WIDGET")
+            echo "$key app=$app_v widget=$ext_v" | tee -a release-report.md
+            test "$app_v" = "$ext_v"
+          done
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "0.1.0"
       - name: Publish evidence
         if: always() && github.event_name == 'push'
         run: |

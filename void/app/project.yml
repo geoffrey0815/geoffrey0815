@@ -46,6 +46,9 @@ targets:
       path: Void/Info.plist
       properties:
         CFBundleDisplayName: void
+        # Explicit, or XcodeGen writes 1.0/1 and the widget may not match the app.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [audio, fetch]
@@ -72,6 +75,8 @@ targets:
       path: VoidWidgets/Info.plist
       properties:
         CFBundleDisplayName: void
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

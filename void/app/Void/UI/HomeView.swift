@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(RecordingController.self) private var recorder
     @Query(sort: \Meeting.startedAt, order: .reverse) private var meetings: [Meeting]
     @State private var showSettings = false
+    @State private var pendingDelete: Meeting?
 
     var body: some View {
         NavigationStack {
@@ -36,9 +37,9 @@ struct HomeView: View {
                                 if meeting.status == .ready {
                                     ShareLink(item: meeting.plainText) { Label("공유", systemImage: "square.and.arrow.up") }
                                 }
-                                Button("삭제", systemImage: "trash", role: .destructive) {
-                                    ProcessingPipeline.shared.delete(meetingID: meeting.id)
-                                }
+                                // No destructive role: it would be the only red in a grayscale app.
+                                // The confirmation below is the safety net instead.
+                                Button("삭제", systemImage: "trash") { pendingDelete = meeting }
                             }
                         }
                     }
@@ -59,6 +60,14 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .confirmationDialog(
+                "이 회의와 녹음을 삭제할까요?",
+                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { meeting in
+                Button("삭제") { ProcessingPipeline.shared.delete(meetingID: meeting.id) }
+            }
         }
     }
 

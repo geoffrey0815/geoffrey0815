@@ -70,8 +70,16 @@ final class Meeting {
         audioFileName.map { Self.recordingsDirectory.appendingPathComponent($0) }
     }
 
+    /// The summary's title, or what the meeting is waiting for. Never the date: rows and the
+    /// detail header already show the date underneath (screenshots showed it twice).
     var displayTitle: String {
-        title.isEmpty ? startedAt.formatted(date: .abbreviated, time: .shortened) : title
+        guard title.isEmpty else { return title }
+        switch status {
+        case .recording: return "녹음 중인 회의"
+        case .transcribing, .summarizing: return "정리 중인 회의"
+        case .failed: return "요약하지 못한 회의"
+        case .ready: return "제목 없는 회의"
+        }
     }
 
     /// Readable notes for sharing or copying: title, date, summary, decisions, action items.

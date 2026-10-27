@@ -73,13 +73,18 @@ struct LiveActivityControls: View {
                 Button(intent: KeepRecordingIntent()) {
                     Text("계속")
                 }
-                .tint(Theme.muted)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .tint(Theme.ink)
             } else {
                 Spacer()
             }
             Button(intent: StopRecordingIntent()) {
                 Label("정지", systemImage: "stop.fill")
             }
+            // A filled capsule: the renders showed plain text that did not read as a button.
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
             .tint(Theme.ink)
         }
     }

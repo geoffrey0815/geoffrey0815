@@ -26,7 +26,13 @@ final class ScreenshotTests: XCTestCase {
             return false
         }
         app.buttons["녹음 시작"].tap()
-        app.tap() // lets the interruption monitor handle the permission alert
+        // The permission alert belongs to SpringBoard; answer it there so it never lingers
+        // into the next test's screenshots (it did before).
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for label in ["Allow", "허용"] where springboard.buttons[label].waitForExistence(timeout: 3) {
+            springboard.buttons[label].tap()
+            break
+        }
         sleep(3)
         XCTAssertEqual(app.state, .runningForeground, "app must not crash when recording cannot start")
         snap("04-record-attempt")
@@ -40,6 +46,10 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.buttons["삭제"].waitForExistence(timeout: 5))
         snap("07-context-menu")
         app.buttons["삭제"].tap()
+        // Confirmation dialog, then the row disappears.
+        XCTAssertTrue(app.buttons["삭제"].waitForExistence(timeout: 5))
+        snap("07b-delete-confirm")
+        app.buttons["삭제"].firstMatch.tap()
         XCTAssertTrue(standup.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["meeting-mtg_seed_review"].exists)
     }

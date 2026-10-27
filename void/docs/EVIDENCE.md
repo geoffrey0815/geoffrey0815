@@ -37,3 +37,18 @@
 - **결과:** VoidCore 테스트 20개 → 리뷰 반영 후 24개 통과, 앱·위젯 unsigned 빌드 성공, 스파이크 벤치 빌드 성공. 경고는 SwiftData `#Predicate` 매크로의 Sendable 경고뿐(프레임워크 측).
 - **증거:** Actions run 40532831903 (첫 빌드), 40534836432 (PR #1 최종 head 9de234a).
 - **리뷰:** Codex·Sourcery 27건 전부 답변 (수정/이미 수정됨/문서 정정).
+
+### E4 · 시뮬레이터 테스트 + 화면 검수 (a55a7aa, CI run 40538367850)
+- **결과:** 26개 중 25 통과, 1 실패. VoidCore·앱 빌드·스파이크·Release 아카이브 모두 통과.
+  - 실패 `testClientErrorIsNotRetried` → **실제 버그:** 4xx로 거부·재시도 소진된 전송에 60 s 리스(`nextDeliveryAt`)가 남아 "재시도 예정"처럼 보임 → 수정(78bb4f7).
+  - Silero: 합성 음성은 음성으로, 무음·잡음은 아님으로 판별 (`SileroVADTests` 4개 통과).
+- **배포 점검에서 발견:** `CFBundleShortVersionString`이 `0.1.0`이 아닌 `1.0` (XcodeGen 기본값) → 앱·위젯 모두 빌드 설정에 고정하고, CI가 앱/위젯 버전 일치를 검사(42712ec). 위젯 버전이 앱과 다르면 App Store 검증에서 거절된다.
+- **화면 검수 (직접 확인):** [홈·상세](evidence/a55a7aa/screens-home-detail.png) · [상태들](evidence/a55a7aa/screens-states.png) · [설정](evidence/a55a7aa/screens-settings.png) · [Live Activity·위젯](evidence/a55a7aa/live-activity-widget.png)
+  - 라이트/다크 모두 깨짐·겹침 없음. grayscale + 그림자 원칙 유지. 마이크 없는 시뮬레이터에서 녹음 버튼을 눌러도 크래시 없음.
+  - 발견한 문제 6개 → 수정:
+    1. 제목 없는 회의가 목록·상세에서 날짜를 두 번 표시 → 상태별 제목(“정리 중인 회의”, “요약하지 못한 회의”)
+    2. 마이크 권한 알림이 다음 테스트 스크린샷까지 남음 → SpringBoard에서 응답
+    3. 삭제가 빨간색(유일한 색) + 확인 없이 즉시 삭제 → 회색 + 확인 대화상자
+    4. 시스템 강조색(파랑·초록)이 토글·대화상자에 나올 수 있음 → 앱 전체 `tint(Theme.ink)`
+    5. Live Activity의 정지·계속이 버튼처럼 보이지 않음 → 캡슐 버튼(정지는 채움)
+    6. (1과 같은 원인) 실패 상세 화면 제목이 날짜

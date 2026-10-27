@@ -10,6 +10,8 @@ struct VoidApp: App {
         WindowGroup {
             HomeView()
                 .environment(RecordingController.shared)
+                // App-wide accent: toggles, dialogs and controls stay grayscale instead of blue/green.
+                .tint(Theme.ink)
                 .task {
                     #if DEBUG
                     // Seeded UI-test data is static; recovery would try to reprocess it.

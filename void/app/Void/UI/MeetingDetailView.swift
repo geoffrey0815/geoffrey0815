@@ -75,12 +75,12 @@ struct MeetingDetailView: View {
                         }
                     }
                 }
-                Button("삭제", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                Button("삭제", systemImage: "trash") { confirmDelete = true }
             }
             .tint(Theme.ink)
         }
         .confirmationDialog("이 회의와 녹음을 삭제할까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("삭제", role: .destructive) {
+            Button("삭제") {
                 // Leave the screen first: a view must not render a model that is gone.
                 let id = meeting.id
                 dismiss()

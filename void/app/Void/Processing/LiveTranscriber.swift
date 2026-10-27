@@ -51,6 +51,7 @@ final class LiveTranscriber: @unchecked Sendable {
             try await request.downloadAndInstall()
         }
         let analyzer = SpeechAnalyzer(modules: [transcriber])
+        await analyzer.useGlossary(AppSettings.glossary)
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
             throw TranscriberError.noAudioFormat
         }

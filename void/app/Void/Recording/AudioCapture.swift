@@ -40,6 +40,12 @@ final class AudioCapture: @unchecked Sendable {
         try session.setActive(true)
 
         let format = engine.inputNode.outputFormat(forBus: 0)
+        // No usable input (no microphone, or a simulator without audio in): installing a tap
+        // with a 0 Hz format raises an Objective-C exception, so fail cleanly instead.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            try? session.setActive(false)
+            throw CaptureError.noInput
+        }
         file = try AVAudioFile(
             forWriting: url,
             settings: [
@@ -161,7 +167,15 @@ final class AudioCapture: @unchecked Sendable {
         continuation?.yield(.frame(Frame(time: time, isSpeech: vad.isSpeech(buffer), level: EnergyVAD.rms(buffer))))
     }
 
-    private enum CaptureError: Error {
+    private enum CaptureError: LocalizedError {
         case formatChanged
+        case noInput
+
+        var errorDescription: String? {
+            switch self {
+            case .formatChanged: "마이크가 바뀌었습니다."
+            case .noInput: "사용할 수 있는 마이크가 없습니다."
+            }
+        }
     }
 }

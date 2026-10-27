@@ -10,12 +10,26 @@ struct VoidApp: App {
         WindowGroup {
             HomeView()
                 .environment(RecordingController.shared)
-                .task { await ProcessingPipeline.shared.recoverInterruptedWork() }
+                // App-wide accent: toggles, dialogs and controls stay grayscale instead of blue/green.
+                .tint(Theme.ink)
+                .task {
+                    #if DEBUG
+                    // Seeded UI-test data is static; recovery would try to reprocess it.
+                    if UITestSupport.isActive { return }
+                    #endif
+                    await ProcessingPipeline.shared.recoverInterruptedWork()
+                }
+                #if DEBUG
+                .preferredColorScheme(UITestSupport.colorScheme)
+                #endif
         }
         .modelContainer(Persistence.container)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                Task { await ProcessingPipeline.shared.retryDueDeliveries() }
+                Task {
+                    ProcessingPipeline.shared.purgeExpiredAudio()
+                    await ProcessingPipeline.shared.retryDueDeliveries()
+                }
             }
         }
         .backgroundTask(.appRefresh(WebhookDelivery.refreshTaskID)) {

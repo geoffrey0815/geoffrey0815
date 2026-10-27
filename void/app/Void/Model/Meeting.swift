@@ -16,6 +16,8 @@ final class Meeting {
     @Attribute(.unique) var id: String
     var startedAt: Date
     var endedAt: Date?
+    /// When the meeting last became `.ready`; audio retention counts from here.
+    var processedAt: Date?
     var endReasonRaw: String?
     var statusRaw: String
     var deliveryRaw: String
@@ -68,8 +70,29 @@ final class Meeting {
         audioFileName.map { Self.recordingsDirectory.appendingPathComponent($0) }
     }
 
+    /// The summary's title, or what the meeting is waiting for. Never the date: rows and the
+    /// detail header already show the date underneath (screenshots showed it twice).
     var displayTitle: String {
-        title.isEmpty ? startedAt.formatted(date: .abbreviated, time: .shortened) : title
+        guard title.isEmpty else { return title }
+        switch status {
+        case .recording: return "녹음 중인 회의"
+        case .transcribing, .summarizing: return "정리 중인 회의"
+        case .failed: return "요약하지 못한 회의"
+        case .ready: return "제목 없는 회의"
+        }
+    }
+
+    /// Readable notes for sharing or copying: title, date, summary, decisions, action items.
+    var plainText: String {
+        var lines = [displayTitle, startedAt.formatted(date: .long, time: .shortened)]
+        if !summary.isEmpty { lines += ["", summary] }
+        if !decisions.isEmpty { lines += ["", "결정사항"] + decisions.map { "• \($0)" } }
+        if !actionItems.isEmpty {
+            lines += ["", "할 일"] + actionItems.map { item in
+                "☐ \(item.task)" + (item.owner.map { " — \($0)" } ?? "") + (item.due.map { " (\($0))" } ?? "")
+            }
+        }
+        return lines.joined(separator: "\n")
     }
 
     func result(includeTranscript: Bool) -> MeetingResult {
@@ -110,6 +133,9 @@ enum Persistence {
     /// The store lives in its own folder excluded from iCloud/device backup, like the
     /// recordings: transcripts and summaries must not leave the device that way either.
     static let container: ModelContainer = {
+        #if DEBUG
+        if UITestSupport.isActive { return UITestSupport.makeSeededContainer() }
+        #endif
         var directory = URL.applicationSupportDirectory.appendingPathComponent("Store", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var values = URLResourceValues()

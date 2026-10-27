@@ -16,6 +16,9 @@ struct WebhookDelivery {
     /// Backoff between persisted attempts: 30 s, 1 m, 2 m … capped at 6 h, 8 attempts.
     static let policy = RetryPolicy()
 
+    /// Injected in tests to stub the network.
+    var session: URLSession = .shared
+
     /// BGAppRefreshTask identifier; must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
     static let refreshTaskID = (Bundle.main.bundleIdentifier ?? "void") + ".webhook-retry"
 
@@ -27,7 +30,7 @@ struct WebhookDelivery {
         )
         do {
             let request = try builder.makeRequest(for: result)
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if (200..<300).contains(status) { return .delivered }
             return RetryPolicy.isRetryable(statusCode: status) ? .retryable("HTTP \(status)") : .rejected("HTTP \(status)")

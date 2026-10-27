@@ -1,4 +1,5 @@
 import SwiftUI
+import VoidCore
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -8,11 +9,14 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.silenceMinutes) private var silenceMinutes = 3
     @AppStorage(SettingsKey.recognitionLocale) private var recognitionLocale = "ko-KR"
     @AppStorage(SettingsKey.summaryLanguage) private var summaryLanguage = "ko"
-    @AppStorage(SettingsKey.deleteAudioAfterProcessing) private var deleteAudio = false
+    @AppStorage(SettingsKey.audioRetentionDays) private var audioRetentionDays = -1
+    @AppStorage(SettingsKey.glossary) private var glossary = ""
 
     @State private var secret = Keychain.string(for: Keychain.webhookSecret) ?? ""
     @State private var authorization = Keychain.string(for: Keychain.webhookAuthorization) ?? ""
     @State private var saveError: String?
+    @State private var testResult: String?
+    @State private var isTesting = false
 
     private var webhookURLIsInvalid: Bool {
         !webhookURL.trimmingCharacters(in: .whitespaces).isEmpty && AppSettings.webhookURL == nil
@@ -22,14 +26,26 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://", text: $webhookURL)
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    SecureField("서명 비밀키 (선택)", text: $secret)
-                    SecureField("Authorization 헤더 (선택)", text: $authorization)
+                    Group {
+                        TextField("https://", text: $webhookURL)
+                            .keyboardType(.URL)
+                            .textContentType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        SecureField("서명 비밀키 (선택)", text: $secret)
+                        SecureField("Authorization 헤더 (선택)", text: $authorization)
+                    }
+                    // A test result only describes the values it was sent with.
+                    .disabled(isTesting)
+                    .onChange(of: webhookURL) { testResult = nil }
+                    .onChange(of: secret) { testResult = nil }
+                    .onChange(of: authorization) { testResult = nil }
                     Toggle("원문 포함", isOn: $includeTranscript)
+                    Button(isTesting ? "보내는 중…" : "테스트 전송") {
+                        Task { await sendTest() }
+                    }
+                    .disabled(AppSettings.webhookURL == nil || isTesting)
+                    .tint(Theme.ink)
                 } header: {
                     Text("Webhook")
                 } footer: {
@@ -38,6 +54,9 @@ struct SettingsView: View {
                     }
                     if let saveError {
                         Text(saveError).fontWeight(.semibold)
+                    }
+                    if let testResult {
+                        Text(testResult).fontWeight(.semibold)
                     }
                     Text("녹음이 끝나면 요약을 이 주소로 보냅니다. 앱이 기기 밖으로 보내는 데이터는 이것뿐입니다. 비밀키를 넣으면 X-Void-Signature 헤더로 서명합니다.")
                 }
@@ -62,7 +81,23 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("처리 후 오디오 삭제", isOn: $deleteAudio)
+                    TextField("예: D&A, GPA, 민지, Hang Seng", text: $glossary, axis: .vertical)
+                        .lineLimit(2...6)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("용어집")
+                } footer: {
+                    Text("사람 이름, 제품명, 약어처럼 자주 틀리는 단어를 줄바꿈이나 쉼표로 적어 두면 받아쓰기와 요약이 그대로 맞춥니다.")
+                }
+
+                Section {
+                    Picker("오디오 보관", selection: $audioRetentionDays) {
+                        Text("처리 후 바로 삭제").tag(0)
+                        Text("7일").tag(7)
+                        Text("30일").tag(30)
+                        Text("계속 보관").tag(-1)
+                    }
                 } header: {
                     Text("개인정보")
                 } footer: {
@@ -84,6 +119,37 @@ struct SettingsView: View {
                 .fontWeight(.semibold)
                 .tint(Theme.ink)
             }
+        }
+    }
+
+    /// Sends a sample payload with the values on screen (saved or not), so the user can
+    /// check URL, auth header and signature before a real meeting depends on them.
+    private func sendTest() async {
+        guard let url = AppSettings.webhookURL else { return }
+        isTesting = true
+        defer { isTesting = false }
+        let sample = MeetingResult(
+            id: "mtg_test_" + UUID().uuidString.lowercased(),
+            startedAt: .now.addingTimeInterval(-30 * 60),
+            endedAt: .now,
+            endReason: .manual,
+            language: "ko",
+            title: "void 테스트",
+            summary: "webhook 연결을 확인하는 테스트 메시지입니다.",
+            decisions: [],
+            actionItems: [.init(task: "webhook 수신 확인하기")]
+        )
+        let outcome = await WebhookDelivery().send(
+            sample,
+            to: url,
+            secret: secret.isEmpty ? nil : secret,
+            authorization: authorization.isEmpty ? nil : authorization
+        )
+        switch outcome {
+        case .delivered:
+            testResult = "테스트 전송 성공"
+        case .retryable(let reason), .rejected(let reason):
+            testResult = "테스트 전송 실패: \(reason)"
         }
     }
 }

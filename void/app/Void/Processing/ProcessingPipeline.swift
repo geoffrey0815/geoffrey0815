@@ -5,13 +5,18 @@ import VoidCore
 /// recording file → transcript → summary → webhook. Everything but the webhook is on-device.
 @MainActor
 final class ProcessingPipeline {
-    static let shared = ProcessingPipeline()
+    static let shared = ProcessingPipeline(container: Persistence.container)
 
     var transcriber: any Transcriber = SpeechAnalyzerTranscriber()
-    var summarizer = Summarizer()
+    var summarizer: any MeetingSummarizer = Summarizer()
     var delivery = WebhookDelivery()
 
-    private var context: ModelContext { Persistence.container.mainContext }
+    private let container: ModelContainer
+    private var context: ModelContext { container.mainContext }
+
+    init(container: ModelContainer) {
+        self.container = container
+    }
     /// Meetings being processed by this process, so recovery never runs one twice.
     private var inFlight: Set<String> = []
     private var didRecover = false
@@ -40,20 +45,14 @@ final class ProcessingPipeline {
             meeting.title = summary.title
             meeting.summary = summary.summary
             meeting.decisions = summary.decisions
-            meeting.actionItems = summary.actionItems.map {
-                .init(task: $0.task, owner: $0.owner.isEmpty ? nil : $0.owner)
-            }
+            meeting.actionItems = summary.actionItems
             meeting.status = .ready
+            meeting.processedAt = .now
             meeting.errorMessage = nil
             save()
 
-            if AppSettings.deleteAudioAfterProcessing {
-                do {
-                    try FileManager.default.removeItem(at: audioURL)
-                    meeting.audioFileName = nil
-                } catch {
-                    meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
-                }
+            if AppSettings.audioRetentionDays == 0 {
+                deleteAudio(of: meeting)
                 save()
             }
         } catch {
@@ -92,9 +91,11 @@ final class ProcessingPipeline {
         switch outcome {
         case .delivered:
             meeting.delivery = .delivered
+            meeting.nextDeliveryAt = nil
             meeting.errorMessage = nil
         case .rejected(let reason):
             meeting.delivery = .failed
+            meeting.nextDeliveryAt = nil
             meeting.errorMessage = "Webhook이 거부했습니다: \(reason)"
         case .retryable(let reason):
             if let delay = WebhookDelivery.policy.delay(afterAttempt: meeting.deliveryAttempts) {
@@ -109,6 +110,7 @@ final class ProcessingPipeline {
                 }
             } else {
                 meeting.delivery = .failed
+                meeting.nextDeliveryAt = nil
                 meeting.errorMessage = "Webhook 전송 실패: \(reason)"
             }
         }
@@ -150,11 +152,65 @@ final class ProcessingPipeline {
                 break
             }
         }
+        // Purge first: it is local and quick, retries may wait on the network.
+        purgeExpiredAudio()
         await retryDueDeliveries()
+    }
+
+    /// Deletes recordings of processed meetings older than the retention setting. Failed
+    /// meetings keep their audio so they can be reprocessed.
+    /// Retention counts from processing, so a meeting reprocessed late still keeps its audio
+    /// for the full period. With 0 days, switching the setting clears existing recordings too.
+    func purgeExpiredAudio() {
+        guard let days = AppSettings.audioRetentionDays else { return }
+        let cutoff = Date.now.addingTimeInterval(-TimeInterval(days) * 86_400)
+        let ready = Meeting.Status.ready.rawValue
+        let candidates = (try? context.fetch(FetchDescriptor<Meeting>(
+            predicate: #Predicate { $0.statusRaw == ready && $0.audioFileName != nil }
+        ))) ?? []
+        let expired = candidates.filter { ($0.processedAt ?? $0.endedAt ?? $0.startedAt) <= cutoff }
+        guard !expired.isEmpty else { return }
+        expired.forEach(deleteAudio(of:))
+        save()
+    }
+
+    /// Clears the reference only once the file is really gone, so nothing is orphaned. A file
+    /// that is already missing (deleted before a save was lost) just clears the stale reference.
+    private func deleteAudio(of meeting: Meeting) {
+        guard let url = meeting.audioURL else { return }
+        do {
+            if FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.removeItem(at: url)
+            }
+            meeting.audioFileName = nil
+        } catch {
+            meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
+        }
     }
 
     private func fetch(_ id: String) -> Meeting? {
         try? context.fetch(FetchDescriptor<Meeting>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    /// Deletes a meeting and its recording. Refused while it is still being recorded or
+    /// processed, so no task writes into a deleted record.
+    @discardableResult
+    func delete(meetingID: String) -> Bool {
+        guard meetingID != RecordingController.shared.currentMeetingID,
+              !inFlight.contains(meetingID),
+              let meeting = fetch(meetingID) else { return false }
+        if let url = meeting.audioURL, FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                meeting.errorMessage = "오디오를 삭제하지 못했습니다: \(error.localizedDescription)"
+                save()
+                return false
+            }
+        }
+        context.delete(meeting)
+        save()
+        return true
     }
 
     /// "다시 처리" for a failed meeting whose audio is still on the device.

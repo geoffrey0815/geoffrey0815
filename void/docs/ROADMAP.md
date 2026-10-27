@@ -1,29 +1,40 @@
 # Roadmap — void
 
-## Phase 0 · 결정 & 위험 검증 (1~2주) ← 지금
+## Phase 0 · 결정 & 위험 검증
 
 UI보다 먼저, **"이게 로컬에서 정말 되는가"** 를 확인한다.
 
 - [x] ADR-0001: 1차 플랫폼 → iOS
-- [x] VoidCore: 무음 자동 종료 상태머신, webhook 페이로드·서명·재시도 정책 (단위 테스트 작성됨 — Mac에서 `swift test`로 첫 실행 필요)
-- [ ] Spike A — 한국어 STT 품질/속도: WhisperKit vs SpeechAnalyzer, 실제 회의 녹음 3개로 비교 (CER, 60분당 처리 시간, 배터리)
-- [ ] Spike B — 온디바이스 요약 품질: 한국어 회의 전사본 → 요약/결정/액션아이템 JSON. 60분 분량 map-reduce
-- [ ] Spike C — 백그라운드 녹음 + 컨트롤 센터/위젯에서 시작, 화면 꺼진 상태 60분 유지
-- [ ] Spike D — VAD 기반 무음 자동 종료 (오탐 테스트: 긴 침묵이 있는 회의, 키보드 소리, 에어컨 소음)
+- [x] VoidCore: 무음 자동 종료 · webhook 페이로드/서명/재시도 · 청크 분할 · 음성 창 병합 (CI에서 테스트)
+- [~] Spike A — 전사: CPU 기준선 완료 (`spikes/A-stt-bench/BASELINE.md`). **WhisperKit vs SpeechAnalyzer 비교는 Mac에서 실행 필요** → ADR-0002
+- [ ] Spike B — 온디바이스 요약 품질: **Apple Intelligence Mac에서 실행 필요** (벤치 코드는 CI에서 빌드됨)
+- [ ] Spike C — 컨트롤 센터에서 시작 + 화면 끈 채 60분: **실기기 필요**
+- [x] Spike D — 무음 자동 종료: 실제 52분 녹음으로 앱 로직 재현, 기본 3분 / 최소 2분 확정
 
-**종료 조건:** 4개 스파이크 결과를 `spikes/*/RESULT.md`로 기록하고 기술 스택 확정.
+## Phase 1 · MVP — 완료 (실기기 검증만 남음)
 
-## Phase 1 · MVP (3~4주)
+F1~F9 구현, 매 푸시 CI 검증. 증거: [`EVIDENCE.md`](EVIDENCE.md).
 
-F1~F6 (P0). 화면은 홈 / 상세 / 설정 3개. 본인이 매일 쓰는 수준까지.
-
-- [x] iOS 앱 뼈대: 위젯·컨트롤 센터·Live Activity·녹음·무음 종료·받아쓰기·요약·webhook 연결 (`app/`, 미컴파일)
-- [ ] 첫 빌드 → 남은 일은 [`app/README.md`](../app/README.md)
+- [x] 1탭 시작: 위젯 · 제어 센터 · 잠금화면 · Action 버튼 · Siri (`AudioRecordingIntent`)
+- [x] Live Activity / Dynamic Island: 경과 시간, 정지, 무음 경고 + 계속
+- [x] 녹음: AAC, Silero VAD(번들), 인터럽션·라우트 변경 처리, 크래시 복구
+- [x] 무음 자동 종료 (기본 3분, 최소 2분 — 실제 녹음 데이터로 결정)
+- [x] 실시간 받아쓰기(SpeechAnalyzer) + 파일 받아쓰기 대체, 용어집
+- [x] 온디바이스 요약(Foundation Models, 계층적 map-reduce)
+- [x] 서명된 webhook(HTTPS 전용, 재시도 영속화, 테스트 전송)
+- [x] 목록·상세·삭제·공유/복사·다시 처리·빈 화면 (F7)
+- [x] 오디오 보관 기간 (F8)
+- [x] 회의에 질문하기 (F9)
+- [x] 배포 준비: 개인정보 매니페스트, 버전 일치, Release 아카이브 검사, App Store 문구 ([`RELEASE.md`](RELEASE.md))
+- [x] 디자인 검수: 라이트·다크·최대 글자 크기 스크린샷 리뷰, 발견 8건 수정
+- [ ] **실기기:** Spike C 체크리스트 (잠금 상태 제어 센터 시작, 화면 끈 채 60분, 실제 마이크 → 요약 → webhook)
+- [ ] **Mac:** Spike A(받아쓰기 엔진 비교 → ADR-0002) · Spike B(요약 품질)
+- [ ] 본인이 1주일 실제 회의에 사용 → 불편 목록
 
 ## Phase 2 · 다듬기
 
-P1 기능, 디자인 시스템(grayscale 토큰 + elevation 단계) 정리, TestFlight 베타.
+TestFlight 베타, 요약 템플릿(회의/강연), 디자인 시스템 정리.
 
-## Phase 3 · AI-native 확장
+## Phase 3 · 확장
 
-회의에 질문하기, 요약 템플릿, 화자 구분.
+화자 구분, macOS 메뉴바 앱(VoidCore 재사용).

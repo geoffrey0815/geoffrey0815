@@ -1,8 +1,11 @@
 import SwiftUI
+import UIKit
 
 struct MeetingDetailView: View {
     let meeting: Meeting
+    @Environment(\.dismiss) private var dismiss
     @State private var showTranscript = false
+    @State private var confirmDelete = false
 
     var body: some View {
         ScrollView {
@@ -29,6 +32,9 @@ struct MeetingDetailView: View {
                             Bullet(text: item.owner.map { "\(item.task) — \($0)" } ?? item.task, symbol: "square")
                         }
                     }
+                }
+                if meeting.status == .ready {
+                    AskSection(meeting: meeting)
                 }
                 if !meeting.transcript.isEmpty {
                     DisclosureGroup("원문 (\(meeting.transcript.count)개 구간)", isExpanded: $showTranscript) {
@@ -59,11 +65,40 @@ struct MeetingDetailView: View {
                 }
                 .tint(Theme.ink)
             }
-            if meeting.status == .ready, AppSettings.webhookURL != nil {
-                Button("다시 보내기", systemImage: "arrow.up.circle") {
-                    Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }
+            Menu("더보기", systemImage: "ellipsis") {
+                if meeting.status == .ready {
+                    ShareLink(item: meeting.plainText) { Label("공유", systemImage: "square.and.arrow.up") }
+                    Button("복사", systemImage: "doc.on.doc") { UIPasteboard.general.string = meeting.plainText }
+                    if AppSettings.webhookURL != nil {
+                        Button("Webhook 다시 보내기", systemImage: "arrow.up.circle") {
+                            Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }
+                        }
+                    }
                 }
-                .tint(Theme.ink)
+                Button("삭제", systemImage: "trash") { confirmDelete = true }
+            }
+            .tint(Theme.ink)
+        }
+        .confirmationDialog("이 회의와 녹음을 삭제할까요?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("삭제") {
+                // Leave the screen first: a view must not render a model that is gone.
+                let id = meeting.id
+                dismiss()
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    ProcessingPipeline.shared.delete(meetingID: id)
+                }
+            }
+        }
+    }
+
+    private var when: some View {
+        HStack(spacing: 8) {
+            Text(meeting.startedAt.formatted(date: .abbreviated, time: .shortened))
+            if let endedAt = meeting.endedAt {
+                Text("·")
+                Text(Duration.seconds(endedAt.timeIntervalSince(meeting.startedAt))
+                    .formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))
             }
         }
     }
@@ -72,15 +107,18 @@ struct MeetingDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(meeting.displayTitle)
                 .font(.title2.weight(.semibold))
-            HStack(spacing: 8) {
-                Text(meeting.startedAt.formatted(date: .abbreviated, time: .shortened))
-                if let endedAt = meeting.endedAt {
-                    Text("·")
-                    Text(Duration.seconds(endedAt.timeIntervalSince(meeting.startedAt))
-                        .formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))
+            // One line when it fits; stacked at large text sizes, where one line squeezed the
+            // date into a word-per-line column.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    when.fixedSize()
+                    Spacer()
+                    StatusLabel(meeting: meeting)
                 }
-                Spacer()
-                StatusLabel(meeting: meeting)
+                VStack(alignment: .leading, spacing: 4) {
+                    when
+                    StatusLabel(meeting: meeting)
+                }
             }
             .font(.subheadline)
             .foregroundStyle(Theme.muted)
@@ -125,6 +163,66 @@ private struct Bullet: View {
                 .font(.system(size: symbol == "circle.fill" ? 5 : 12))
                 .foregroundStyle(Theme.muted)
             Text(text)
+        }
+    }
+}
+
+/// "질문하기": ask the on-device model about this meeting. Answers stay on screen only.
+private struct AskSection: View {
+    let meeting: Meeting
+    @State private var question = ""
+    @State private var exchanges: [(question: String, answer: String)] = []
+    @State private var isAnswering = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        DetailSection(title: "질문하기") {
+            ForEach(Array(exchanges.enumerated()), id: \.offset) { _, exchange in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exchange.question)
+                        .font(.subheadline.weight(.semibold))
+                    Text(exchange.answer)
+                        .font(.callout)
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(.bottom, 4)
+            }
+            HStack(spacing: 8) {
+                TextField("이 회의에 대해 물어보세요", text: $question, axis: .vertical)
+                    .lineLimit(1...3)
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit(ask)
+                    .accessibilityIdentifier("ask-field")
+                if isAnswering {
+                    ProgressView()
+                } else {
+                    Button("보내기", systemImage: "arrow.up.circle.fill", action: ask)
+                        .labelStyle(.iconOnly)
+                        .font(.title2)
+                        .tint(Theme.ink)
+                        .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func ask() {
+        let asked = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !asked.isEmpty, !isAnswering else { return }
+        let notes = MeetingNotes(meeting)
+        question = ""
+        focused = false
+        isAnswering = true
+        Task {
+            let answer: String
+            do {
+                answer = try await Answerers.current.answer(asked, about: notes)
+            } catch {
+                answer = error.localizedDescription
+            }
+            exchanges.append((asked, answer))
+            isAnswering = false
         }
     }
 }

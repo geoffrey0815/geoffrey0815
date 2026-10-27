@@ -9,7 +9,8 @@ enum SettingsKey {
     static let silenceMinutes = "silenceMinutes"
     static let recognitionLocale = "recognitionLocale"
     static let summaryLanguage = "summaryLanguage"
-    static let deleteAudioAfterProcessing = "deleteAudioAfterProcessing"
+    static let audioRetentionDays = "audioRetentionDays"
+    static let glossary = "glossary"
 }
 
 enum AppSettings {
@@ -44,8 +45,28 @@ enum AppSettings {
         UserDefaults.standard.string(forKey: SettingsKey.summaryLanguage) ?? "ko"
     }
 
-    static var deleteAudioAfterProcessing: Bool {
-        UserDefaults.standard.bool(forKey: SettingsKey.deleteAudioAfterProcessing)
+    /// Names and terms the user wants recognized and spelled exactly (people, products,
+    /// acronyms). Fed to speech recognition as context and to the summary as spellings.
+    static var glossary: [String] {
+        parseGlossary(UserDefaults.standard.string(forKey: SettingsKey.glossary) ?? "")
+    }
+
+    /// One term per line or comma, trimmed, de-duplicated, at most 100.
+    static func parseGlossary(_ raw: String) -> [String] {
+        var seen = Set<String>()
+        return raw
+            .split(whereSeparator: { $0 == "\n" || $0 == "," })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .prefix(100)
+            .map { $0 }
+    }
+
+    /// How long recordings are kept after a meeting is processed: 0 deletes right away,
+    /// nil keeps them until the user deletes the meeting (default).
+    static var audioRetentionDays: Int? {
+        let days = UserDefaults.standard.object(forKey: SettingsKey.audioRetentionDays) as? Int ?? -1
+        return days < 0 ? nil : days
     }
 }
 

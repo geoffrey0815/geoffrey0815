@@ -32,7 +32,7 @@ void/
 
 ## 지금 어디까지?
 
-**Phase 0 — 위험 검증.** 플랫폼은 iOS로 확정 ([ADR-0001](docs/adr/0001-primary-platform.md)). [`docs/ROADMAP.md`](docs/ROADMAP.md) 참고.
+**Phase 1 MVP 기능 완료** — 남은 것은 실기기·Mac 검증. 진행 상황은 [`docs/ROADMAP.md`](docs/ROADMAP.md), 검증 기록은 [`docs/EVIDENCE.md`](docs/EVIDENCE.md), 배포 절차는 [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## 시작하기 (Mac)
 

@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(RecordingController.self) private var recorder
     @Query(sort: \Meeting.startedAt, order: .reverse) private var meetings: [Meeting]
     @State private var showSettings = false
+    @State private var pendingDelete: Meeting?
 
     var body: some View {
         NavigationStack {
@@ -13,12 +14,33 @@ struct HomeView: View {
                     recorderSection
                         .padding(.top, 24)
 
+                    if meetings.isEmpty {
+                        VStack(spacing: 6) {
+                            Text("아직 회의가 없어요")
+                                .font(.subheadline.weight(.semibold))
+                            Text("위젯이나 제어 센터에서도 바로 녹음할 수 있어요")
+                                .font(.footnote)
+                        }
+                        .foregroundStyle(Theme.muted)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 24)
+                    }
+
                     LazyVStack(spacing: 12) {
                         ForEach(meetings) { meeting in
                             NavigationLink(value: meeting.id) {
                                 MeetingRow(meeting: meeting)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("meeting-\(meeting.id)")
+                            .contextMenu {
+                                if meeting.status == .ready {
+                                    ShareLink(item: meeting.plainText) { Label("공유", systemImage: "square.and.arrow.up") }
+                                }
+                                // No destructive role: it would be the only red in a grayscale app.
+                                // The confirmation below is the safety net instead.
+                                Button("삭제", systemImage: "trash") { pendingDelete = meeting }
+                            }
                         }
                     }
                 }
@@ -38,6 +60,14 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .confirmationDialog(
+                "이 회의와 녹음을 삭제할까요?",
+                isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { meeting in
+                Button("삭제") { ProcessingPipeline.shared.delete(meetingID: meeting.id) }
+            }
         }
     }
 
@@ -112,15 +142,26 @@ private struct SilenceWarning: View {
 private struct MeetingRow: View {
     let meeting: Meeting
 
+    private var title: some View {
+        Text(meeting.displayTitle)
+            .font(.headline)
+            .foregroundStyle(Theme.ink)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(meeting.displayTitle)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(1)
-                Spacer()
-                StatusLabel(meeting: meeting)
+            // Side by side when it fits; at large text sizes the status moves under the
+            // title instead of truncating it (seen in the accessibility screenshots).
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    title.lineLimit(1).fixedSize()
+                    Spacer()
+                    StatusLabel(meeting: meeting)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    title
+                    StatusLabel(meeting: meeting)
+                }
             }
             if !meeting.summary.isEmpty {
                 Text(meeting.summary)

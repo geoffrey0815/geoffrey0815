@@ -28,6 +28,7 @@ struct SpeechAnalyzerTranscriber: Transcriber {
         }
 
         let analyzer = SpeechAnalyzer(modules: [transcriber])
+        await analyzer.useGlossary(AppSettings.glossary)
         let file = try AVAudioFile(forReading: url)
 
         async let segments = transcriber.results.reduce(into: [MeetingResult.Segment]()) { list, result in
@@ -41,6 +42,17 @@ struct SpeechAnalyzerTranscriber: Transcriber {
             await analyzer.cancelAndFinishNow()
         }
         return try await segments
+    }
+}
+
+extension SpeechAnalyzer {
+    /// Biases recognition toward the user's glossary. Best effort: a failure here must not
+    /// stop the transcription itself.
+    func useGlossary(_ terms: [String]) async {
+        guard !terms.isEmpty else { return }
+        let context = AnalysisContext()
+        context.contextualStrings[.general] = terms
+        try? await setContext(context)
     }
 }
 

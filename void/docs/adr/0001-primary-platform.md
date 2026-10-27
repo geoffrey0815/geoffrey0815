@@ -1,6 +1,6 @@
 # ADR-0001: 1차 타깃 플랫폼
 
-- 상태: **Proposed**
+- 상태: **Accepted** (2026-10-27)
 - 날짜: 2026-10-27
 
 ## 맥락
@@ -23,4 +23,8 @@ OS 내장 LLM이 있어 "완전 로컬 + 앱 용량 작음"을 동시에 만족�
 
 ## 결정
 
-_사용자 확인 후 기록_
+**iOS 26+ / Swift 6 / SwiftUI**로 간다.
+
+- 로컬 요약: Apple Foundation Models (Apple Intelligence 지원 기기 필요 — iPhone 15 Pro 이상)
+- 로컬 전사: WhisperKit vs SpeechAnalyzer는 Spike A 결과로 ADR-0002에서 결정
+- 공통 로직은 `app/VoidCore` Swift Package로 분리해 macOS 메뉴바 앱 확장에 재사용

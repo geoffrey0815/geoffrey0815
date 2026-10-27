@@ -1,0 +1,74 @@
+# XcodeGen spec. Generate the Xcode project with:
+#   brew install xcodegen && cd app && xcodegen
+# Change VOID_BUNDLE_ID below to your own reverse-DNS id before signing.
+name: Void
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  xcodeVersion: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    VOID_BUNDLE_ID: com.example.void
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Swift 5 language mode with complete checking: concurrency issues surface as
+    # warnings while the skeleton is first compiled. Move to Swift 6 once clean.
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: "1"
+
+packages:
+  VoidCore:
+    path: VoidCore
+  onnxruntime:
+    url: https://github.com/microsoft/onnxruntime-swift-package-manager
+    from: 1.24.2
+
+targets:
+  Void:
+    type: application
+    platform: iOS
+    scheme: {}
+    sources:
+      - Void
+      - Shared
+    dependencies:
+      - package: VoidCore
+      - package: onnxruntime
+        product: onnxruntime
+      - target: VoidWidgets
+    info:
+      path: Void/Info.plist
+      properties:
+        CFBundleDisplayName: void
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [$(VOID_BUNDLE_ID).webhook-retry]
+        NSSupportsLiveActivities: true
+        NSMicrophoneUsageDescription: 회의를 녹음하고 기기 안에서 받아쓰기 위해 마이크를 사용합니다. 녹음은 기기 밖으로 나가지 않습니다.
+        NSSpeechRecognitionUsageDescription: 녹음한 회의를 기기 안에서 받아쓰기 위해 음성 인식을 사용합니다.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  VoidWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - VoidWidgets
+      - Shared
+    info:
+      path: VoidWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: void
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID).widgets
+        # Shared intents compile app-only code out of the extension with this flag.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION

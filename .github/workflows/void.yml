@@ -1,0 +1,52 @@
+name: void
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["void/**", ".github/workflows/void.yml"]
+  pull_request:
+    paths: ["void/**", ".github/workflows/void.yml"]
+
+concurrency:
+  group: void-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: VoidCore tests
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: void/app/VoidCore
+    steps:
+      - uses: actions/checkout@v5
+      - run: xcodebuild -version && swift --version
+      - run: swift test
+
+  app:
+    name: iOS app build
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: void/app
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - run: xcodegen
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project Void.xcodeproj -scheme Void \
+            -destination 'generic/platform=iOS' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee build.log | grep -E "error:|warning: .*(Sendable|actor|concurrency)|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+  spikes:
+    name: Spike benches build
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - run: swift build --package-path void/spikes/A-stt-bench
+      - run: swift build --package-path void/spikes/B-summary-bench

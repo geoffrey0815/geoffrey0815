@@ -27,6 +27,7 @@ targets:
   Void:
     type: application
     platform: iOS
+    scheme: {}
     sources:
       - Void
       - Shared

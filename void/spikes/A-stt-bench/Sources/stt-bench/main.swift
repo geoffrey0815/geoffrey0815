@@ -1,6 +1,6 @@
 // Spike A: compare on-device Korean STT engines on the same recording.
 //
-// Usage: swift run -c release stt-bench <audio.m4a> [reference.txt] [whisperkit|speech|all]
+// Usage: swift run -c release stt-bench <audio.m4a> [reference.txt|-] [whisperkit|speech|all] [ko|en|...]
 //
 // Prints wall-clock time, real-time factor and, when a reference transcript is given,
 // character error rate (CER). Transcripts are written next to the audio file.
@@ -21,19 +21,19 @@ func audioDuration(_ url: URL) throws -> Double {
     return Double(file.length) / file.processingFormat.sampleRate
 }
 
-func runWhisperKit(_ url: URL) async throws -> BenchResult {
+func runWhisperKit(_ url: URL, language: String) async throws -> BenchResult {
     // The first run downloads the model from Hugging Face; later runs are fully offline.
     // Time is measured after loading so the comparison reflects transcription only.
     let pipe = try await WhisperKit(WhisperKitConfig(model: "large-v3-v20240930_turbo"))
     let start = Date()
-    let results = try await pipe.transcribe(audioPath: url.path, decodeOptions: DecodingOptions(language: "ko"))
+    let results = try await pipe.transcribe(audioPath: url.path, decodeOptions: DecodingOptions(language: language))
     let text = results.map(\.text).joined(separator: "\n")
     return BenchResult(engine: "whisperkit", text: text, seconds: Date().timeIntervalSince(start))
 }
 
-func runSpeechAnalyzer(_ url: URL) async throws -> BenchResult {
-    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "ko-KR")) else {
-        throw NSError(domain: "stt-bench", code: 1, userInfo: [NSLocalizedDescriptionKey: "SpeechTranscriber does not support ko-KR on this OS"])
+func runSpeechAnalyzer(_ url: URL, language: String) async throws -> BenchResult {
+    guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: language)) else {
+        throw NSError(domain: "stt-bench", code: 1, userInfo: [NSLocalizedDescriptionKey: "SpeechTranscriber does not support \(language) on this OS"])
     }
     let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [])
     if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
@@ -76,7 +76,7 @@ func characterErrorRate(hypothesis: String, reference: String) -> Double {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    print("usage: stt-bench <audio> [reference.txt] [whisperkit|speech|all]")
+    print("usage: stt-bench <audio> [reference.txt|-] [whisperkit|speech|all] [ko|en|...]")
     exit(2)
 }
 let audioURL = URL(fileURLWithPath: args[1])
@@ -86,12 +86,13 @@ let reference: String? = if args.count >= 3, args[2] != "-" {
     nil
 }
 let engine = args.count >= 4 ? args[3] : "all"
+let language = args.count >= 5 ? args[4] : "ko"
 let duration = try audioDuration(audioURL)
 print(String(format: "audio: %@ (%.1f min)", audioURL.lastPathComponent, duration / 60))
 
 var runs: [() async throws -> BenchResult] = []
-if engine == "all" || engine == "whisperkit" { runs.append { try await runWhisperKit(audioURL) } }
-if engine == "all" || engine == "speech" { runs.append { try await runSpeechAnalyzer(audioURL) } }
+if engine == "all" || engine == "whisperkit" { runs.append { try await runWhisperKit(audioURL, language: language) } }
+if engine == "all" || engine == "speech" { runs.append { try await runSpeechAnalyzer(audioURL, language: language) } }
 
 for run in runs {
     do {

@@ -26,7 +26,7 @@ void/
 │   ├── ROADMAP.md     ← 단계별 계획
 │   └── adr/           ← 기술 결정 기록 (Architecture Decision Records)
 ├── spikes/            ← 위험 검증용 일회성 실험 (A 전사 · B 요약 · C 백그라운드 녹음 · D 무음 종료)
-└── app/
+└── app/               ← iOS 앱 (XcodeGen) — 실행 방법은 app/README.md
     └── VoidCore/      ← 플랫폼 독립 로직 Swift Package (무음 판정, webhook, 청크 분할)
 ```
 

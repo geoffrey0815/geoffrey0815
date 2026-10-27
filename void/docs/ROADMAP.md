@@ -17,6 +17,9 @@ UI보다 먼저, **"이게 로컬에서 정말 되는가"** 를 확인한다.
 
 F1~F6 (P0). 화면은 홈 / 상세 / 설정 3개. 본인이 매일 쓰는 수준까지.
 
+- [x] iOS 앱 뼈대: 위젯·컨트롤 센터·Live Activity·녹음·무음 종료·받아쓰기·요약·webhook 연결 (`app/`, 미컴파일)
+- [ ] 첫 빌드 → 남은 일은 [`app/README.md`](../app/README.md)
+
 ## Phase 2 · 다듬기
 
 P1 기능, 디자인 시스템(grayscale 토큰 + elevation 단계) 정리, TestFlight 베타.

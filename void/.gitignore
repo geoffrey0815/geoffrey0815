@@ -7,3 +7,6 @@ xcuserdata/
 *.m4a
 *.wav
 *.caf
+app/Void.xcodeproj/
+app/Void/Info.plist
+app/VoidWidgets/Info.plist

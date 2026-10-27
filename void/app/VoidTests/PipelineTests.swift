@@ -206,6 +206,12 @@ final class PipelineTests: XCTestCase {
         XCTAssertTrue(text.contains("☐ 공지 작성하기 — 민지"))
     }
 
+    func testGlossaryParsing() {
+        XCTAssertEqual(AppSettings.parseGlossary(" D&A, GPA\n민지,,\n d&a \nHang Seng "), ["D&A", "GPA", "민지", "Hang Seng"])
+        XCTAssertEqual(AppSettings.parseGlossary(""), [])
+        XCTAssertEqual(AppSettings.parseGlossary(Array(repeating: "x", count: 1).joined() + (0..<200).map { ",t\($0)" }.joined()).count, 100)
+    }
+
     func testDefaultRetentionKeepsAudio() async throws {
         let meeting = try makeMeeting(status: .ready, startedAt: .now.addingTimeInterval(-400 * 86_400))
         pipeline.purgeExpiredAudio()

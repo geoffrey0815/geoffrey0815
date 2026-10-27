@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.recognitionLocale) private var recognitionLocale = "ko-KR"
     @AppStorage(SettingsKey.summaryLanguage) private var summaryLanguage = "ko"
     @AppStorage(SettingsKey.audioRetentionDays) private var audioRetentionDays = -1
+    @AppStorage(SettingsKey.glossary) private var glossary = ""
 
     @State private var secret = Keychain.string(for: Keychain.webhookSecret) ?? ""
     @State private var authorization = Keychain.string(for: Keychain.webhookAuthorization) ?? ""
@@ -77,6 +78,17 @@ struct SettingsView: View {
                         Text("한국어").tag("ko")
                         Text("English").tag("en")
                     }
+                }
+
+                Section {
+                    TextField("예: D&A, GPA, 민지, Hang Seng", text: $glossary, axis: .vertical)
+                        .lineLimit(2...6)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("용어집")
+                } footer: {
+                    Text("사람 이름, 제품명, 약어처럼 자주 틀리는 단어를 줄바꿈이나 쉼표로 적어 두면 받아쓰기와 요약이 그대로 맞춥니다.")
                 }
 
                 Section {

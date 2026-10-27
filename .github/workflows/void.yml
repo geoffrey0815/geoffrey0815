@@ -3,13 +3,18 @@ name: void
 on:
   push:
     branches: [main, "claude/**"]
-    paths: ["void/**", ".github/workflows/void.yml"]
-  pull_request:
-    paths: ["void/**", ".github/workflows/void.yml"]
+    paths: ["void/**", ".github/workflows/void.yml", ".github/scripts/**"]
+  # No pull_request trigger: push runs already report on the PR's head commit, and
+  # running both doubled the macOS runner queue.
+  workflow_dispatch:
 
 concurrency:
   group: void-${{ github.ref }}
   cancel-in-progress: true
+
+# contents: write lets push builds publish evidence to the ci-evidence branch.
+permissions:
+  contents: write
 
 jobs:
   core:
@@ -64,6 +69,7 @@ jobs:
                   print(phones[0]["udid"]); print(runtime, phones[0]["name"], file=sys.stderr); break
           ')
           echo "UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIM_NAME=$(xcrun simctl list devices | grep "$UDID" | sed -E 's/ \(.*//; s/^ +//')" >> "$GITHUB_ENV"
       - name: Test
         run: |
           set -o pipefail
@@ -90,6 +96,25 @@ jobs:
                           shutil.copy(src, pathlib.Path("evidence/screenshots") / (name.split("_0_")[0] + src.suffix))
           PY
           ls -la evidence/screenshots
+      - name: Summarize test results
+        if: always()
+        run: |
+          {
+            echo "# Simulator tests — ${GITHUB_SHA::7}"
+            echo
+            echo "- Simulator: $SIM_NAME"
+            echo "- Passed: $(grep -cE 'Test Case .* passed' test.log || true)"
+            echo "- Failed: $(grep -cE 'Test Case .* failed' test.log || true)"
+            echo "- Result: $(grep -oE 'TEST (SUCCEEDED|FAILED)' test.log | tail -1)"
+            echo
+            echo '```'
+            grep -E "Test Case .*(passed|failed)|error:" test.log | sed -E 's/^.*Test Case //' | head -200
+            echo '```'
+          } > evidence/screenshots/TESTS.md
+          cat evidence/screenshots/TESTS.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish evidence
+        if: always() && github.event_name == 'push'
+        run: ../../.github/scripts/publish-evidence.sh evidence/screenshots tests
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -143,6 +168,13 @@ jobs:
           test -f "$APP/silero_vad.onnx"
           test -d "$APP/PlugIns/VoidWidgets.appex"
           test "$(strings "$APP/Void" | grep -c uiTestSeed)" = "0"
+      - name: Publish evidence
+        if: always() && github.event_name == 'push'
+        run: |
+          mkdir -p evidence/release
+          cp release-report.md evidence/release/RELEASE.md 2>/dev/null || echo "archive failed" > evidence/release/RELEASE.md
+          grep -E "error:" archive.log | head -50 >> evidence/release/RELEASE.md || true
+          ../../.github/scripts/publish-evidence.sh evidence/release release
       - uses: actions/upload-artifact@v4
         if: always()
         with:

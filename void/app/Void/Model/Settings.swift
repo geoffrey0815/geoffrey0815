@@ -10,6 +10,7 @@ enum SettingsKey {
     static let recognitionLocale = "recognitionLocale"
     static let summaryLanguage = "summaryLanguage"
     static let audioRetentionDays = "audioRetentionDays"
+    static let glossary = "glossary"
 }
 
 enum AppSettings {
@@ -42,6 +43,23 @@ enum AppSettings {
     /// Language the summary is written in, independent of the meeting's spoken language.
     static var summaryLanguage: String {
         UserDefaults.standard.string(forKey: SettingsKey.summaryLanguage) ?? "ko"
+    }
+
+    /// Names and terms the user wants recognized and spelled exactly (people, products,
+    /// acronyms). Fed to speech recognition as context and to the summary as spellings.
+    static var glossary: [String] {
+        parseGlossary(UserDefaults.standard.string(forKey: SettingsKey.glossary) ?? "")
+    }
+
+    /// One term per line or comma, trimmed, de-duplicated, at most 100.
+    static func parseGlossary(_ raw: String) -> [String] {
+        var seen = Set<String>()
+        return raw
+            .split(whereSeparator: { $0 == "\n" || $0 == "," })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            .prefix(100)
+            .map { $0 }
     }
 
     /// How long recordings are kept after a meeting is processed: 0 deletes right away,

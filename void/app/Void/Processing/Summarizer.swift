@@ -62,11 +62,13 @@ struct Summarizer: MeetingSummarizer {
             throw SummarizerError.modelUnavailable
         }
         let languageName = Locale.current.localizedString(forLanguageCode: outputLanguage) ?? outputLanguage
+        let glossary = AppSettings.glossary
+        let spellings = glossary.isEmpty ? "" : "\nThese names and terms are spelled exactly like this: \(glossary.joined(separator: ", "))."
         let instructions = """
         You write meeting notes. Use only what is in the transcript; never invent facts.
         The transcript comes from speech recognition, so silently fix words that are clearly misheard.
         If the recording is a talk or lecture rather than a meeting, leave decisions empty.
-        Write everything in \(languageName).
+        Write everything in \(languageName).\(spellings)
         """
 
         let chunks = TranscriptChunker.chunks(of: segments, maxCharacters: maxCharactersPerChunk)

@@ -14,6 +14,14 @@ enum UITestSupport {
         return ProcessInfo.processInfo.arguments.contains("-uiTestDark") ? .dark : .light
     }
 
+    /// Deterministic answers so the Q&A screen can be exercised and captured.
+    struct CannedAnswerer: MeetingAnswerer {
+        func answer(_ question: String, about meeting: MeetingNotes) async throws -> String {
+            try await Task.sleep(for: .milliseconds(300))
+            return "출시는 12월 첫째 주로 확정했어요. 마케팅은 그다음 주에 시작합니다."
+        }
+    }
+
     @MainActor
     static func makeSeededContainer() -> ModelContainer {
         let container = try! ModelContainer(

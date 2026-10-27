@@ -21,3 +21,19 @@
 - 실제 마이크 입력 → 실시간 받아쓰기 → 요약 전 과정
 
 ## 기록
+
+### E1 · Phase 0 — 실제 녹음으로 파이프라인 설계 검증 (2026-10-27)
+- **무엇을:** 52분 강연 녹음(영어, 원거리)을 Whisper turbo + Silero VAD로 전사.
+- **결과:** VAD 구간을 ≤25 s 창으로 병합하자 RTF 0.41 → 0.18, 조각난 환각 문장 제거. → `VoidCore/SpeechWindowing` 채택.
+- **증거:** `spikes/A-stt-bench/BASELINE.md` (구간별 수치·예문).
+
+### E2 · 무음 자동 종료 임계값 (2026-10-27)
+- **무엇을:** 앱의 Silero + `SilenceMonitor` 로직을 Python으로 재현해 같은 녹음에 실행.
+- **결과:** 가장 긴 자연 무음 61.4 s. 1분 설정은 45:30에 오종료, 2·3분은 끝까지 녹음 → 최소 2분, 기본 3분.
+- **증거:** `spikes/D-silence-autostop/RESULT.md`.
+
+### E3 · 첫 컴파일 · 단위 테스트 (PR #1, 2026-10-27)
+- **무엇을:** Linux에서 작성한 코드를 macOS 26 CI에서 처음 빌드.
+- **결과:** VoidCore 테스트 20개 → 리뷰 반영 후 24개 통과, 앱·위젯 unsigned 빌드 성공, 스파이크 벤치 빌드 성공. 경고는 SwiftData `#Predicate` 매크로의 Sendable 경고뿐(프레임워크 측).
+- **증거:** Actions run 40532831903 (첫 빌드), 40534836432 (PR #1 최종 head 9de234a).
+- **리뷰:** Codex·Sourcery 27건 전부 답변 (수정/이미 수정됨/문서 정정).

@@ -44,6 +44,19 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["meeting-mtg_seed_review"].exists)
     }
 
+    /// Largest accessibility text size: layouts must wrap, not clip or overlap.
+    func testAccessibilityTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestSeed", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
+        app.launch()
+        let review = app.descendants(matching: .any)["meeting-mtg_seed_review"]
+        XCTAssertTrue(review.waitForExistence(timeout: 15))
+        snap("09-home-large-text")
+        review.tap()
+        XCTAssertTrue(app.staticTexts["결정사항"].waitForExistence(timeout: 5))
+        snap("09b-detail-large-text")
+    }
+
     func testEmptyState() {
         let app = XCUIApplication()
         app.launchArguments = ["-uiTestSeed", "-uiTestEmpty"]
@@ -65,6 +78,15 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["결정사항"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["할 일"].exists)
         snap("02-detail-\(mode)")
+
+        let ask = app.descendants(matching: .any)["ask-field"]
+        XCTAssertTrue(ask.waitForExistence(timeout: 5))
+        app.swipeUp()
+        ask.tap()
+        ask.typeText("출시는 언제야?")
+        app.buttons["보내기"].tap()
+        XCTAssertTrue(app.staticTexts["출시는 12월 첫째 주로 확정했어요. 마케팅은 그다음 주에 시작합니다."].waitForExistence(timeout: 5))
+        snap("02b-ask-\(mode)")
 
         app.navigationBars.buttons.firstMatch.tap()
         let failed = app.descendants(matching: .any)["meeting-mtg_seed_failed"]

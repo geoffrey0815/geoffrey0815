@@ -33,6 +33,9 @@ struct MeetingDetailView: View {
                         }
                     }
                 }
+                if meeting.status == .ready {
+                    AskSection(meeting: meeting)
+                }
                 if !meeting.transcript.isEmpty {
                     DisclosureGroup("원문 (\(meeting.transcript.count)개 구간)", isExpanded: $showTranscript) {
                         LazyVStack(alignment: .leading, spacing: 10) {
@@ -146,6 +149,66 @@ private struct Bullet: View {
                 .font(.system(size: symbol == "circle.fill" ? 5 : 12))
                 .foregroundStyle(Theme.muted)
             Text(text)
+        }
+    }
+}
+
+/// "질문하기": ask the on-device model about this meeting. Answers stay on screen only.
+private struct AskSection: View {
+    let meeting: Meeting
+    @State private var question = ""
+    @State private var exchanges: [(question: String, answer: String)] = []
+    @State private var isAnswering = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        DetailSection(title: "질문하기") {
+            ForEach(Array(exchanges.enumerated()), id: \.offset) { _, exchange in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exchange.question)
+                        .font(.subheadline.weight(.semibold))
+                    Text(exchange.answer)
+                        .font(.callout)
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(.bottom, 4)
+            }
+            HStack(spacing: 8) {
+                TextField("이 회의에 대해 물어보세요", text: $question, axis: .vertical)
+                    .lineLimit(1...3)
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit(ask)
+                    .accessibilityIdentifier("ask-field")
+                if isAnswering {
+                    ProgressView()
+                } else {
+                    Button("보내기", systemImage: "arrow.up.circle.fill", action: ask)
+                        .labelStyle(.iconOnly)
+                        .font(.title2)
+                        .tint(Theme.ink)
+                        .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private func ask() {
+        let asked = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !asked.isEmpty, !isAnswering else { return }
+        let notes = MeetingNotes(meeting)
+        question = ""
+        focused = false
+        isAnswering = true
+        Task {
+            let answer: String
+            do {
+                answer = try await Answerers.current.answer(asked, about: notes)
+            } catch {
+                answer = error.localizedDescription
+            }
+            exchanges.append((asked, answer))
+            isAnswering = false
         }
     }
 }

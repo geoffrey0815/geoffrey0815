@@ -20,6 +20,7 @@ jobs:
   core:
     name: VoidCore tests
     runs-on: macos-26
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: void/app/VoidCore
@@ -31,6 +32,7 @@ jobs:
   app:
     name: iOS app build
     runs-on: macos-26
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: void/app
@@ -51,6 +53,7 @@ jobs:
   app-tests:
     name: iOS tests and screenshots (simulator)
     runs-on: macos-26
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: void/app
@@ -76,6 +79,7 @@ jobs:
           xcodebuild test -project Void.xcodeproj -scheme Void \
             -destination "id=$UDID" \
             -resultBundlePath TestResults.xcresult \
+            -test-timeouts-enabled YES -maximum-test-execution-time-allowance 120 \
             | tee test.log | grep -E "Test Case .*(passed|failed)|error:|XCTAssert|TEST (SUCCEEDED|FAILED)" || true
           grep -q "TEST SUCCEEDED" test.log
       - name: Export screenshots
@@ -129,6 +133,7 @@ jobs:
   release:
     name: Release archive (deploy check)
     runs-on: macos-26
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: void/app
@@ -193,6 +198,7 @@ jobs:
   spikes:
     name: Spike benches build
     runs-on: macos-26
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - run: swift build --package-path void/spikes/A-stt-bench

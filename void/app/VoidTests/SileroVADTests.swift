@@ -53,16 +53,22 @@ final class SileroVADTests: XCTestCase {
             var finished = false
         }
         let collector = Collector()
-        let rendered: [AVAudioPCMBuffer] = await withCheckedContinuation { continuation in
-            synthesizer.write(utterance) { buffer in
-                guard !collector.finished else { return }
-                guard let pcm = buffer as? AVAudioPCMBuffer, pcm.frameLength > 0 else {
-                    collector.finished = true
-                    continuation.resume(returning: collector.buffers)
-                    return
-                }
-                if let copy = pcm.copy() { collector.buffers.append(copy) }
+        // Bounded wait: a simulator without voices never calls back, which would hang the run.
+        let done = expectation(description: "speech synthesized")
+        synthesizer.write(utterance) { buffer in
+            guard !collector.finished else { return }
+            guard let pcm = buffer as? AVAudioPCMBuffer, pcm.frameLength > 0 else {
+                collector.finished = true
+                done.fulfill()
+                return
             }
+            if let copy = pcm.copy() { collector.buffers.append(copy) }
+        }
+        await fulfillment(of: [done], timeout: 30)
+        collector.finished = true
+        let rendered = collector.buffers
+        if rendered.isEmpty {
+            throw XCTSkip("this simulator has no speech voice to synthesize test audio")
         }
         // Convert to the microphone format and cut into 4096-frame buffers.
         var samples: [Float] = []

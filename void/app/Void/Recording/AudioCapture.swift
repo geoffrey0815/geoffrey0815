@@ -23,7 +23,7 @@ final class AudioCapture: @unchecked Sendable {
 
     private let engine = AVAudioEngine()
     private var file: AVAudioFile?
-    private var vad = EnergyVAD()
+    private var vad: any VoiceActivityDetector = EnergyVAD()
     private var framesWritten: AVAudioFramePosition = 0
     private var writeFailed = false
     private var continuation: AsyncStream<Event>.Continuation?
@@ -48,7 +48,7 @@ final class AudioCapture: @unchecked Sendable {
         )
         framesWritten = 0
         writeFailed = false
-        vad = EnergyVAD()
+        vad = SileroVAD.bundled().map { $0 as any VoiceActivityDetector } ?? EnergyVAD()
 
         let (stream, continuation) = AsyncStream.makeStream(of: Event.self, bufferingPolicy: .bufferingNewest(256))
         self.continuation = continuation
@@ -142,17 +142,7 @@ final class AudioCapture: @unchecked Sendable {
         }
         let time = Double(framesWritten) / sampleRate
         framesWritten += AVAudioFramePosition(buffer.frameLength)
-        let level = Self.rms(buffer)
-        continuation?.yield(.frame(Frame(time: time, isSpeech: vad.isSpeech(rms: level), level: level)))
-    }
-
-    private static func rms(_ buffer: AVAudioPCMBuffer) -> Float {
-        guard let channel = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
-        var sum: Float = 0
-        for i in 0..<Int(buffer.frameLength) {
-            sum += channel[i] * channel[i]
-        }
-        return (sum / Float(buffer.frameLength)).squareRoot()
+        continuation?.yield(.frame(Frame(time: time, isSpeech: vad.isSpeech(buffer), level: EnergyVAD.rms(buffer))))
     }
 
     private enum CaptureError: Error {

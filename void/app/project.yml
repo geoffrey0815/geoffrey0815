@@ -22,6 +22,9 @@ settings:
 packages:
   VoidCore:
     path: VoidCore
+  onnxruntime:
+    url: https://github.com/microsoft/onnxruntime-swift-package-manager
+    from: 1.24.2
 
 targets:
   Void:
@@ -33,6 +36,8 @@ targets:
       - Shared
     dependencies:
       - package: VoidCore
+      - package: onnxruntime
+        product: onnxruntime
       - target: VoidWidgets
     info:
       path: Void/Info.plist

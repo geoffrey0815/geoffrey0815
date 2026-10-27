@@ -142,15 +142,26 @@ private struct SilenceWarning: View {
 private struct MeetingRow: View {
     let meeting: Meeting
 
+    private var title: some View {
+        Text(meeting.displayTitle)
+            .font(.headline)
+            .foregroundStyle(Theme.ink)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(meeting.displayTitle)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(1)
-                Spacer()
-                StatusLabel(meeting: meeting)
+            // Side by side when it fits; at large text sizes the status moves under the
+            // title instead of truncating it (seen in the accessibility screenshots).
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    title.lineLimit(1).fixedSize()
+                    Spacer()
+                    StatusLabel(meeting: meeting)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    title
+                    StatusLabel(meeting: meeting)
+                }
             }
             if !meeting.summary.isEmpty {
                 Text(meeting.summary)

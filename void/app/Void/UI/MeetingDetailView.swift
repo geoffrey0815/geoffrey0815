@@ -92,19 +92,33 @@ struct MeetingDetailView: View {
         }
     }
 
+    private var when: some View {
+        HStack(spacing: 8) {
+            Text(meeting.startedAt.formatted(date: .abbreviated, time: .shortened))
+            if let endedAt = meeting.endedAt {
+                Text("·")
+                Text(Duration.seconds(endedAt.timeIntervalSince(meeting.startedAt))
+                    .formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))
+            }
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(meeting.displayTitle)
                 .font(.title2.weight(.semibold))
-            HStack(spacing: 8) {
-                Text(meeting.startedAt.formatted(date: .abbreviated, time: .shortened))
-                if let endedAt = meeting.endedAt {
-                    Text("·")
-                    Text(Duration.seconds(endedAt.timeIntervalSince(meeting.startedAt))
-                        .formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)))
+            // One line when it fits; stacked at large text sizes, where one line squeezed the
+            // date into a word-per-line column.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    when.fixedSize()
+                    Spacer()
+                    StatusLabel(meeting: meeting)
                 }
-                Spacer()
-                StatusLabel(meeting: meeting)
+                VStack(alignment: .leading, spacing: 4) {
+                    when
+                    StatusLabel(meeting: meeting)
+                }
             }
             .font(.subheadline)
             .foregroundStyle(Theme.muted)

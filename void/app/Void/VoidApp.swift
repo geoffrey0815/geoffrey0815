@@ -4,12 +4,23 @@ import SwiftUI
 
 @main
 struct VoidApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             HomeView()
                 .environment(RecordingController.shared)
+                .task { await ProcessingPipeline.shared.recoverInterruptedWork() }
         }
         .modelContainer(Persistence.container)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await ProcessingPipeline.shared.retryDueDeliveries() }
+            }
+        }
+        .backgroundTask(.appRefresh(WebhookDelivery.refreshTaskID)) {
+            await ProcessingPipeline.shared.retryDueDeliveries()
+        }
     }
 }
 

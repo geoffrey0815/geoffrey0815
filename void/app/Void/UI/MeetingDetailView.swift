@@ -55,7 +55,7 @@ struct MeetingDetailView: View {
         .toolbar {
             if meeting.status == .ready, AppSettings.webhookURL != nil {
                 Button("다시 보내기", systemImage: "arrow.up.circle") {
-                    Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id) }
+                    Task { await ProcessingPipeline.shared.deliver(meetingID: meeting.id, manual: true) }
                 }
                 .tint(Theme.ink)
             }

@@ -54,10 +54,11 @@ ProcessingPipeline: SpeechAnalyzer 받아쓰기 → Foundation Models 요약(map
 
 ## Phase 1 남은 일
 
-- [ ] 첫 빌드 & 컴파일 오류 수정
+- [ ] 첫 빌드 & 컴파일 오류 수정 — GitHub Actions(macOS 26)에서 자동 빌드 중
 - [ ] Spike C 체크리스트를 이 앱으로 실기기 검증 (잠금 상태 컨트롤 센터에서 시작, 화면 끈 채 60분)
-- [ ] 녹음 중 전화·다른 앱 오디오 등 인터럽션 처리 (`AVAudioSession.interruptionNotification`)
+- [x] 녹음 중 인터럽션 처리: 통화 후 자동 재개, 마이크 미반환 시 무음 시간만큼 기다린 뒤 종료, 라우트 변경 시 재시작
 - [ ] EnergyVAD → Silero VAD 교체 (Spike D)
 - [ ] 녹음 중 청크 단위 선행 받아쓰기 → 종료 후 대기 시간 단축
-- [ ] Webhook 재시도 큐 영속화 (백그라운드 URLSession / BGTask)
-- [ ] 앱 아이콘
+- [x] Webhook 재시도 영속화: 시도 횟수·다음 시각을 Meeting에 저장, 앱 활성화·BGAppRefresh에서 재시도
+- [x] 앱이 죽었을 때 복구: 녹음 중이던 파일 살려서 처리, 처리 중이던 회의 재개
+- [x] 앱 아이콘 (라이트/다크, grayscale)

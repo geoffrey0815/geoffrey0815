@@ -40,14 +40,15 @@ targets:
         CFBundleDisplayName: void
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [$(VOID_BUNDLE_ID).webhook-retry]
         NSSupportsLiveActivities: true
         NSMicrophoneUsageDescription: 회의를 녹음하고 기기 안에서 받아쓰기 위해 마이크를 사용합니다. 녹음은 기기 밖으로 나가지 않습니다.
         NSSpeechRecognitionUsageDescription: 녹음한 회의를 기기 안에서 받아쓰기 위해 음성 인식을 사용합니다.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID)
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   VoidWidgets:
     type: app-extension

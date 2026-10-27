@@ -18,6 +18,9 @@ final class Meeting {
     var endReasonRaw: String?
     var statusRaw: String
     var deliveryRaw: String
+    var deliveryAttempts: Int = 0
+    /// When a pending delivery should be retried; nil when nothing is scheduled.
+    var nextDeliveryAt: Date?
     var errorMessage: String?
 
     var language: String

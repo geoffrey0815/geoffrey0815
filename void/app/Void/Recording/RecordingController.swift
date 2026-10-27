@@ -21,6 +21,8 @@ final class RecordingController {
     /// Non-nil while the silence warning is up.
     private(set) var autoStopAt: Date?
     private(set) var level: Float = 0
+    /// True while a call or another app holds the microphone.
+    private(set) var isInterrupted = false
     var lastError: String?
 
     private let capture = AudioCapture()
@@ -28,7 +30,10 @@ final class RecordingController {
     private var meeting: Meeting?
     private var activity: Activity<RecordingAttributes>?
     private var framesTask: Task<Void, Never>?
+    private var interruptionTimeout: Task<Void, Never>?
     private var lastFrameTime: TimeInterval = 0
+
+    var currentMeetingID: String? { meeting?.id }
 
     var isRecording: Bool {
         if case .recording = phase { true } else { false }
@@ -53,9 +58,9 @@ final class RecordingController {
 
         let meeting = Meeting(language: AppSettings.recognitionLocale.identifier)
         guard let url = meeting.audioURL else { return }
-        let frames: AsyncStream<AudioCapture.Frame>
+        let events: AsyncStream<AudioCapture.Event>
         do {
-            frames = try capture.start(writingTo: url)
+            events = try capture.start(writingTo: url)
         } catch {
             lastError = "녹음을 시작하지 못했습니다: \(error.localizedDescription)"
             throw error
@@ -74,9 +79,9 @@ final class RecordingController {
         startLiveActivity(startedAt: startedAt)
 
         framesTask = Task { [weak self] in
-            for await frame in frames {
+            for await event in events {
                 guard let self else { return }
-                await self.handle(frame)
+                await self.handle(event)
             }
         }
     }
@@ -86,6 +91,9 @@ final class RecordingController {
         capture.stop()
         framesTask?.cancel()
         framesTask = nil
+        interruptionTimeout?.cancel()
+        interruptionTimeout = nil
+        isInterrupted = false
         phase = .idle
         autoStopAt = nil
         level = 0
@@ -106,6 +114,30 @@ final class RecordingController {
         if monitor.extend(at: lastFrameTime) != nil {
             autoStopAt = nil
             await updateLiveActivity()
+        }
+    }
+
+    private func handle(_ event: AudioCapture.Event) async {
+        switch event {
+        case .frame(let frame):
+            await handle(frame)
+        case .interrupted:
+            isInterrupted = true
+            // Frames stop during an interruption, so the silence monitor is frozen.
+            // If the microphone never comes back, end the meeting after the same timeout.
+            let timeout = monitor.configuration.timeout
+            interruptionTimeout = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(timeout))
+                guard !Task.isCancelled, let self, self.isInterrupted else { return }
+                await self.stop(reason: .silenceTimeout)
+            }
+        case .resumed:
+            isInterrupted = false
+            interruptionTimeout?.cancel()
+            interruptionTimeout = nil
+        case .failed(let message):
+            lastError = message
+            await stop(reason: .manual)
         }
     }
 

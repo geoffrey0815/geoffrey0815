@@ -60,6 +60,12 @@ struct HomeView: View {
             }
             .contentTransition(.opacity)
 
+            if recorder.isInterrupted {
+                Label("다른 앱이 마이크를 쓰는 중이라 잠시 멈췄어요", systemImage: "pause")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.muted)
+            }
+
             if let autoStopAt = recorder.autoStopAt {
                 SilenceWarning(autoStopAt: autoStopAt) {
                     Task { await recorder.keepRecording() }

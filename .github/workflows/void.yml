@@ -19,7 +19,7 @@ jobs:
       run:
         working-directory: void/app/VoidCore
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: xcodebuild -version && swift --version
       - run: swift test
 
@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: void/app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: brew install xcodegen
       - run: xcodegen
       - name: Build (unsigned)

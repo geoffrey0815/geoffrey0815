@@ -91,9 +91,11 @@ final class ProcessingPipeline {
         switch outcome {
         case .delivered:
             meeting.delivery = .delivered
+            meeting.nextDeliveryAt = nil
             meeting.errorMessage = nil
         case .rejected(let reason):
             meeting.delivery = .failed
+            meeting.nextDeliveryAt = nil
             meeting.errorMessage = "Webhook이 거부했습니다: \(reason)"
         case .retryable(let reason):
             if let delay = WebhookDelivery.policy.delay(afterAttempt: meeting.deliveryAttempts) {
@@ -108,6 +110,7 @@ final class ProcessingPipeline {
                 }
             } else {
                 meeting.delivery = .failed
+                meeting.nextDeliveryAt = nil
                 meeting.errorMessage = "Webhook 전송 실패: \(reason)"
             }
         }

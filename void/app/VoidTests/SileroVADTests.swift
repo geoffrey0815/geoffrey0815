@@ -64,7 +64,7 @@ final class SileroVADTests: XCTestCase {
             }
             if let copy = pcm.copy() { collector.buffers.append(copy) }
         }
-        await fulfillment(of: [done], timeout: 30)
+        _ = await XCTWaiter.fulfillment(of: [done], timeout: 30) // no failure on timeout; checked below
         collector.finished = true
         let rendered = collector.buffers
         if rendered.isEmpty {

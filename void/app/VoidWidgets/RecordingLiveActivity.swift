@@ -23,7 +23,7 @@ struct RecordingLiveActivity: Widget {
                         .frame(maxWidth: 80, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Controls(state: context.state)
+                    LiveActivityControls(state: context.state)
                 }
             } compactLeading: {
                 Image(systemName: "waveform")
@@ -38,7 +38,7 @@ struct RecordingLiveActivity: Widget {
     }
 }
 
-private struct LockScreenView: View {
+struct LockScreenView: View {
     let state: RecordingAttributes.ContentState
 
     var body: some View {
@@ -51,13 +51,13 @@ private struct LockScreenView: View {
                     .font(.title2.monospacedDigit().weight(.medium))
                     .multilineTextAlignment(.trailing)
             }
-            Controls(state: state)
+            LiveActivityControls(state: state)
         }
         .foregroundStyle(Theme.ink)
     }
 }
 
-private struct Controls: View {
+struct LiveActivityControls: View {
     let state: RecordingAttributes.ContentState
 
     var body: some View {

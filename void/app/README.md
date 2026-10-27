@@ -15,8 +15,17 @@ Xcode에서 *Signing & Capabilities* → Team 선택 (Void, VoidWidgets 두 타�
 - 요구사항: Xcode 26, iOS 26 실기기, Apple Intelligence 지원 기기(요약). 시뮬레이터는 마이크·Live Activity 테스트에 부적합.
 - 핵심 로직 테스트: `cd VoidCore && swift test`
 
-> ⚠️ 이 뼈대는 Xcode 없이 작성되어 **아직 한 번도 컴파일되지 않았다.** 첫 빌드에서 나오는 오류는 대부분 API 시그니처 차이일 것이다.
-> 특히 확인할 곳: `Transcriber.swift`(SpeechAnalyzer), `Summarizer.swift`(Foundation Models), `RecordingIntents.swift`(AudioRecordingIntent).
+CI(macOS 26)가 매 푸시마다 검증한다 — 결과와 스크린샷은 [`docs/EVIDENCE.md`](../docs/EVIDENCE.md).
+
+| 잡 | 내용 |
+|---|---|
+| VoidCore tests | 무음 판정·webhook·청크·창 병합 단위 테스트 |
+| iOS app build | 앱 + 위젯 unsigned 빌드 |
+| iOS tests and screenshots | 시뮬레이터: 파이프라인·전송·보관·Silero 테스트, 위젯/Live Activity 렌더, 모든 화면 라이트·다크 스크린샷 |
+| Release archive | 배포 점검: Info.plist 키, 개인정보 매니페스트, 위젯·모델·아이콘 포함, 테스트 코드 미포함 |
+| Spike benches build | Spike A·B 컴파일 |
+
+로컬에서: `xcodebuild test -project Void.xcodeproj -scheme Void -destination 'platform=iOS Simulator,name=iPhone 17'`
 
 ## 구조
 
@@ -54,7 +63,8 @@ ProcessingPipeline: SpeechAnalyzer 받아쓰기 → Foundation Models 요약(map
 
 ## Phase 1 남은 일
 
-- [ ] 첫 빌드 & 컴파일 오류 수정 — GitHub Actions(macOS 26)에서 자동 빌드 중
+- [x] 빌드 · 단위/UI 테스트 · Release 아카이브를 CI에서 매 푸시 검증
+- [x] 회의 삭제(녹음 포함) · 공유/복사 · 빈 화면 안내 · 오디오 보관 기간 · webhook 테스트 전송
 - [ ] Spike C 체크리스트를 이 앱으로 실기기 검증 (잠금 상태 컨트롤 센터에서 시작, 화면 끈 채 60분)
 - [x] 녹음 중 인터럽션 처리: 통화 후 자동 재개, 마이크 미반환 시 무음 시간만큼 기다린 뒤 종료, 라우트 변경 시 재시작
 - [x] Silero VAD (번들 ONNX + ONNX Runtime, 모델 로드 실패 시 EnergyVAD로 대체) — 실제 녹음에 앱 로직 재현 검증 (Spike D)

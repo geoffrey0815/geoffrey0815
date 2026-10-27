@@ -85,12 +85,21 @@ targets:
     platform: iOS
     sources:
       - VoidTests
+      # Widget and Live Activity views are compiled in too, so tests can render them.
+      - Shared
+      - path: VoidWidgets
+        excludes:
+          - VoidWidgetsBundle.swift
+          - Info.plist
+          - PrivacyInfo.xcprivacy
     dependencies:
       - target: Void
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: $(VOID_BUNDLE_ID).tests
+        # Like the widget extension: shared intents compile without app-only code.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) WIDGET_EXTENSION
 
   VoidUITests:
     type: bundle.ui-testing

@@ -27,7 +27,7 @@ struct RecordWidget: Widget {
     }
 }
 
-private struct RecordWidgetView: View {
+struct RecordWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
